@@ -1,16 +1,36 @@
 import numpy as np
 
-def initQ(moves) :
+def initQ(moves,allCards) :
 
-    Q = {}
-    for p in range(4,22) :
+    '''
+    I initially didn't have a way to tease out splittable hands vs. non-splittable hands.
+    Also, pair of 6's has the same total of pair of A's, which I wasn't able to differentiate.
+    I need this more specific Q value dictionary to be able to differentiate better.
+    '''
+    
+    movesNoSplit = [m for m in moves if m!='split']
+
+    Q = {
+        'canSplit':{},
+        'noSplit':{}
+    }
+    
+    for p in range(5,22) :
+        
         for h in range(2,12) :
-            if (21 > p > 11)   :
+            if (21 > p > 11) :
                 for a in [True,False] :
-                    Q[(p,h,a)] = {m:0 for m in moves}
+                    Q['noSplit'][(p,h,a)] = {m:0 for m in movesNoSplit}
             else :
-                Q[(p,h,False)] = {m:0 for m in moves}
-                
+                Q['noSplit'][(p,h,False)] = {m:0 for m in movesNoSplit}
+    
+    for c in allCards :
+        if c in ['J','Q','K'] :
+            continue
+        for h in range(2,12) :
+            a = False if c!='A' else True
+            Q['canSplit'][(c,h,a)] = {m:0 for m in moves}
+
     return Q
 
 def getBestAction(state,policy,epsilon) :

@@ -128,7 +128,8 @@ class Game :
             card = self._selectCard(updateCount=(1-i)) #first card is shown, 2nd is hidden
             self.house._dealCard(card)
         
-        if self.house.getValue() == 21 : 
+        house,_,_,_ = self.house.getValue()
+        if house == 21 : 
             self.houseBlackjack = True # If house has blackjack, don't accept bets (except insurance)
         
     def getHouseShow(self,showValue=False) :
@@ -142,13 +143,13 @@ class Game :
              
     def stepHouse(self) :
         
-        house,_ = self.house.getValue()
+        house,_,_,_ = self.house.getValue()
         self._updateCount(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
         
         while house < 17 :
             card = self._selectCard()
             self.house._dealCard(card)
-            house,_ = self.house.getValue()
+            house,_,_,_ = self.house.getValue()
             
     def stepPlayer(self,player,move) :
         
@@ -161,7 +162,7 @@ class Game :
     
     def getResults(self) :
         
-        house,_ = self.house.getValue()
+        house,_,_,_ = self.house.getValue()
         
         players = []
         winnings = []

@@ -68,8 +68,15 @@ class Player:
     def getValue(self) :
         
         iHand = self._getCurHand()
-        
+        n = len(self.cards[iHand])
+
+        canSplit = (n==2) & (self.cards[iHand][0] == self.cards[iHand][1])
         useableAce = False
+        c1 = None
+        if canSplit :
+            c1 = self.cards[iHand][0]
+            if c1 in ['J','Q','K'] :
+                c1 = 10
         
         total = sum([self.cardValues[card] for card in self.cards[iHand]])
     
@@ -78,7 +85,7 @@ class Player:
                 total += 10
                 useableAce = True if total < 21 else False
 
-        return total,useableAce
+        return total,canSplit,useableAce,c1
         
          
     def getValidMoves(self,houseShow) :
@@ -89,7 +96,7 @@ class Player:
         if iHand is None :
             return possibleMoves
         
-        val,_ = self.getValue()
+        val,_,_,_ = self.getValue()
         
         nHands = len(self.cards)
         n = len(self.cards[iHand])
@@ -120,7 +127,6 @@ class Player:
         
         return 0
     
-    
     def step(self,move,cardsGive=[]) :
         
         assert not self._allComplete() , 'Player cannot move anymore!'
@@ -130,7 +136,7 @@ class Player:
         
         if move == 'hit' :
             self._dealCard(cardsGive[0])
-            val,_ = self.getValue()
+            val,_,_,_ = self.getValue()
             if val >= 21 :
                 self.complete[iHand] = 1
                 
