@@ -193,9 +193,13 @@ class Player:
                     if houseIsBlackjack :
                         text.append('loss')
                         winnings -= self.wager[i]
+                    else :
+                        if houseValue == 21 :
+                            text.append('push')
+                        else :
+                            text.append('win')
+                            winnings += self.wager[i]
 
-
-            
             if val < 21 :
                 if houseValue > 21 :
                     text.append('win')

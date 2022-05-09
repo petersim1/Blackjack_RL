@@ -7,7 +7,7 @@ It wraps the Player.py module, which represents each player and the house
 
 class Game :
     
-    def __init__(self,playerModule,shrinkDeck=True,nDecks=6,ratioPenetrate=4/6,verbose=True) :
+    def __init__(self,playerModule,allowHardCodedCards=False,shrinkDeck=True,nDecks=6,ratioPenetrate=4/6,verbose=True) :
         
         '''
         Input :
@@ -25,7 +25,7 @@ class Game :
             self.cardValues[c] = 10
         self.cardValues['A'] = 1
         
-        
+        self.allowHardCodedCards = allowHardCodedCards # Whether or not to allow hardcoded cards as inputs (useful in training).
         self.shrinkDeck = shrinkDeck # if False, will randomly select cards uniformly, and deck won't run out.
         self.verbose = verbose
         self.nDecks = nDecks
@@ -62,9 +62,15 @@ class Game :
         if self.cardValues[card] >= 10 :
             self.count -= 1
             
-    def _selectCard(self,updateCount=True) :
+    def _selectCard(self,updateCount=True,hardcodedCard=None) :
         
-        ind = np.random.choice(list(self.cardMap.keys()),p=self.cards/self.cards.sum())
+        if hardcodedCard is None :
+            # add clipping to cater for hardcoded card values.
+            ind = np.random.choice(list(self.cardMap.keys()),p=np.clip(self.cards,a_min=0,a_max=None)/np.clip(self.cards,a_min=0,a_max=None).sum())
+        else :
+            ind = list(self.cardMap.values()).index(hardcodedCard)
+            if self.cards[ind] <= 0 :
+                self.resetDeckAfterRound = True # on pairs, possible to go negative on number left of that card, but reset deck after depleted.
         
         card = self.cardMap[ind]
         if self.shrinkDeck :
@@ -112,20 +118,23 @@ class Game :
         self.house = None
         self.nRoundsPlayed = 0      
         
-    def dealInit(self) :
-
-        '''
-        returns : 
-            - houseBlackjack : True if house has natural blackjack (important for determining insurance.)
-        '''
+    def dealInit(self,hardcodedCards=None) :
         
         assert self.roundInit , 'Must initialize round before dealing'
+        if hardcodedCards is not None :
+            assert self.allowHardCodedCards, "Must initialize module with allowHardCodedCards=True to use this"
 
         for i in range(2) :
-            for player in self.players :
-                card = self._selectCard()
+            for j,player in enumerate(self.players) :
+                if hardcodedCards is None :
+                    card = self._selectCard()
+                else :
+                    card = self._selectCard(hardcodedCard=hardcodedCards[0][j][i])
                 player._dealCard(card)
-            card = self._selectCard(updateCount=(1-i)) #first card is shown, 2nd is hidden
+            if hardcodedCards is None :
+                card = self._selectCard(updateCount=(1-i)) #first card is shown, 2nd is hidden
+            else :
+                card = self._selectCard(updateCount=(1-i),hardcodedCard=hardcodedCards[1][i])
             self.house._dealCard(card)
         
         house,_,_,_ = self.house.getValue()
