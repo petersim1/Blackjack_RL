@@ -1,16 +1,36 @@
 import numpy as np
 
-def initQ(moves) :
+def initQ(moves,allCards) :
 
-    Q = {}
-    for p in range(4,22) :
+    '''
+    I initially didn't have a way to tease out splittable hands vs. non-splittable hands.
+    Also, pair of 6's has the same total of pair of A's, which I wasn't able to differentiate.
+    I need this more specific Q value dictionary to be able to differentiate better.
+    '''
+    
+    movesNoSplit = [m for m in moves if m!='split']
+
+    Q = {
+        'canSplit':{},
+        'noSplit':{}
+    }
+    
+    for p in range(5,22) :
+        
         for h in range(2,12) :
-            if (21 > p > 11)   :
+            if (21 > p > 11) :
                 for a in [True,False] :
-                    Q[(p,h,a)] = {m:0 for m in moves}
+                    Q['noSplit'][(p,h,a)] = {m:0 for m in movesNoSplit}
             else :
-                Q[(p,h,False)] = {m:0 for m in moves}
-                
+                Q['noSplit'][(p,h,False)] = {m:0 for m in movesNoSplit}
+    
+    for c in allCards :
+        if c in ['J','Q','K'] :
+            continue
+        for h in range(2,12) :
+            a = False if c!='A' else True
+            Q['canSplit'][(c,h,a)] = {m:0 for m in moves}
+
     return Q
 
 def getBestAction(state,policy,epsilon) :
@@ -48,14 +68,18 @@ def genEpisode(blackjack,iPlayer,Q,epsilon) :
 
     while not player.isDone() :
 
-        playerShow,useableAce = player.getValue()
+        playerShow,canSplit,useableAce,card1 = player.getValue()
         nHand = player._getCurHand()
 
         policy = player.getValidMoves(houseShow)
         policy = [p for p in policy if p!='insurance']
-        move = getBestAction(Q[(playerShow,houseShow,useableAce)],policy,epsilon)
+        
+        if canSplit :
+            move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,epsilon)
+        else :
+            move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,epsilon)
 
-        s_a_pairs[nHand].append((playerShow,houseShow,useableAce,move))
+        s_a_pairs[nHand].append((playerShow,houseShow,useableAce,canSplit,card1,move))
 
         if move == 'split' :
             s_a_pairs.append(s_a_pairs[nHand].copy())
@@ -91,18 +115,30 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr) :
         j = 0
         hand = 0
         while hand < len(s_a_pairs[i]) :
-                        
-            p,h,a,m = s_a_pairs[i][hand][j] # current state-action pair (player,house,useableAce,move)
-            oldQ = Q[(p,h,a)][m] # Q value for current state-action pair
+            
+            # current state-action pair 
+            # (player,house,useableAce,canSplit,card_1,move)
+            p,h,a,s,c1,m = s_a_pairs[i][hand][j]
+            if s :
+                oldQ = Q['canSplit'][(c1,h,a)][m] # Q value for current state-action pair if canSplit
+            else :
+                oldQ = Q['noSplit'][(p,h,a)][m] # Q value for current state-action pair if cannotSplit
             
             r = w
             maxQ_p = 0
             if (j+1) < len(s_a_pairs[i][hand]) :
-                p_p,h_p,a_p,_ = s_a_pairs[i][hand][j+1]
-                maxQ_p = max(Q[(p_p,h_p,a_p)].values()) # get maximum Q value for s`
+                p_p,h_p,a_p,s_p,c1_p,_ = s_a_pairs[i][hand][j+1]
+                # get maximum Q value for s`
+                if s_p:
+                    maxQ_p = max(Q['canSplit'][(c1_p,h_p,a_p)].values())
+                else :
+                    maxQ_p = max(Q['noSplit'][(p_p,h_p,a_p)].values())
                 r = 0
             
-            Q[(p,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
+            if s :
+                Q['canSplit'][(c1,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
+            else :
+                Q['noSplit'][(p,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
             
             if j < len(s_a_pairs[i][hand])-1 :
                 j += 1 # move to next player
@@ -124,10 +160,13 @@ def evaluatePolicy(blackjack,Q,wagers,nRounds) :
 
             while not player.isDone() :
                 
-                playerShow,useableAce = player.getValue()
+                playerShow,canSplit,useableAce,card1 = player.getValue()
                 policy = player.getValidMoves(houseShow)
                 policy = [p for p in policy if p!='insurance']
-                move = getBestAction(Q[(playerShow,houseShow,useableAce)],policy,-1)
+                if canSplit:
+                    move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,-1)
+                else :
+                    move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,-1)
 
                 blackjack.stepPlayer(player,move)
 
