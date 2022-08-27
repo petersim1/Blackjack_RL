@@ -33,7 +33,13 @@ def initQ(moves,allCards) :
 
     return Q
 
-def getBestAction(state,policy,epsilon) :
+def getBestAction(state,policy,epsilon,always_random) :
+
+    if always_random :
+        qDict = {k:v for k,v in state.items() if k in policy}
+        p = np.exp(np.array(list(qDict.values()))) / np.exp(np.array(list(qDict.values()))).sum()
+        move = np.random.choice(list(qDict.keys()), p=p)
+        return move
     
     n = np.random.rand()
     if n < epsilon :
@@ -46,7 +52,7 @@ def getBestAction(state,policy,epsilon) :
     return move
 
 
-def genEpisode(blackjack,iPlayer,Q,epsilon) :
+def genEpisode(blackjack,iPlayer,Q,epsilon,always_random) :
     
     '''
     Inputs :
@@ -75,9 +81,9 @@ def genEpisode(blackjack,iPlayer,Q,epsilon) :
         policy = [p for p in policy if p!='insurance']
         
         if canSplit :
-            move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,epsilon)
+            move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,epsilon,always_random)
         else :
-            move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,epsilon)
+            move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,epsilon,always_random)
 
         s_a_pairs[nHand].append((playerShow,houseShow,useableAce,canSplit,card1,move))
 
@@ -88,12 +94,13 @@ def genEpisode(blackjack,iPlayer,Q,epsilon) :
         
     return s_a_pairs
 
-def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr) :
+def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr,always_random=False) :
     
     '''
     epsilon : e-greedy hyperparameter
     gamma : decay factor, which I use to discount rewards for earlier moves in a round
     lr : learning rate to update Q function
+    always_random: allow for random selection of action based on Q values
     
     returns :
         learned Q function
@@ -103,7 +110,7 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr) :
 
     for i in range(nPlayers) :
 
-        s_a_pairs.append(genEpisode(blackjack,i,Q,epsilon))
+        s_a_pairs.append(genEpisode(blackjack,i,Q,epsilon,always_random=always_random))
 
     blackjack.stepHouse() #play the house complete hand.
 
@@ -114,6 +121,7 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr) :
 
         j = 0
         hand = 0
+        # some additional logic is required to account for splitting of hands + multiple players.
         while hand < len(s_a_pairs[i]) :
             
             # current state-action pair 
@@ -143,10 +151,10 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr) :
             if j < len(s_a_pairs[i][hand])-1 :
                 j += 1 # move to next player
             else : 
-                hand += 1 # move to next hand for a player
+                hand += 1 # move to next hand for a player due to splitting.
                 j = 0
 
-def evaluatePolicy(blackjack,Q,wagers,nRounds) :
+def evaluatePolicy(blackjack,Q,wagers,nRounds,always_random=False) :
     
     rewards = [[] for _ in wagers]
         
@@ -164,9 +172,9 @@ def evaluatePolicy(blackjack,Q,wagers,nRounds) :
                 policy = player.getValidMoves(houseShow)
                 policy = [p for p in policy if p!='insurance']
                 if canSplit:
-                    move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,-1)
+                    move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,-1,always_random)
                 else :
-                    move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,-1)
+                    move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,-1,always_random)
 
                 blackjack.stepPlayer(player,move)
 
