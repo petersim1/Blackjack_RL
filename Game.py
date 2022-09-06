@@ -56,8 +56,11 @@ class Game :
         self.house = self.player(0,self.cardValues)
         
     def _updateCount(self,card) :
+
+        if self.cardValues[card] == 1 :
+            self.count -= 1
         
-        if self.cardValues[card] <=6 :
+        if 2 <= self.cardValues[card] <=6 :
             self.count += 1
         if self.cardValues[card] >= 10 :
             self.count -= 1

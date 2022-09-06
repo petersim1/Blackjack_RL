@@ -35,12 +35,14 @@ def initQ(moves,allCards) :
 
 def getBestAction(state,policy,epsilon,always_random) :
 
+    # softmax
     if always_random :
         qDict = {k:v for k,v in state.items() if k in policy}
         p = np.exp(np.array(list(qDict.values()))) / np.exp(np.array(list(qDict.values()))).sum()
         move = np.random.choice(list(qDict.keys()), p=p)
         return move
     
+    # epsilon-greedy
     n = np.random.rand()
     if n < epsilon :
         move = np.random.choice(policy)
