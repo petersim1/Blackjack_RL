@@ -35,9 +35,11 @@ def initQ(moves,allCards) :
 
 def getBestAction(state,policy,epsilon,always_random) :
 
+    # masking of invalid states
+    qDict = {k:v for k,v in state.items() if k in policy}
+
     # softmax
     if always_random :
-        qDict = {k:v for k,v in state.items() if k in policy}
         p = np.exp(np.array(list(qDict.values()))) / np.exp(np.array(list(qDict.values()))).sum()
         move = np.random.choice(list(qDict.keys()), p=p)
         return move
@@ -47,7 +49,6 @@ def getBestAction(state,policy,epsilon,always_random) :
     if n < epsilon :
         move = np.random.choice(policy)
     else :
-        qDict = {k:v for k,v in state.items() if k in policy}
         bestMove = [k for k,v in qDict.items() if v==max(list(qDict.values()))]
         move = np.random.choice(bestMove)
     
@@ -136,13 +137,21 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr,always_random=False) :
             
             r = w
             maxQ_p = 0
+            # If we are not in a terminal state, a reward of zero is given.
+            # In blackjack, we aren't penalized or rewarded for additional moves. We only care about final outcome.
+            # Also, if we are in a terminal state, there is no s`, so we define it as zero.
             if (j+1) < len(s_a_pairs[i][hand]) :
                 p_p,h_p,a_p,s_p,c1_p,_ = s_a_pairs[i][hand][j+1]
                 # get maximum Q value for s`
+                # in blackjack, after first move, our possible action space is constrained.
                 if s_p:
-                    maxQ_p = max(Q['canSplit'][(c1_p,h_p,a_p)].values())
+                    # If you're able to split, I allow for doubling after the split.
+                    valid_moves = ["stay", "hit", "split", "double"]
+                    maxQ_p = max([v for k,v in Q['canSplit'][(c1_p,h_p,a_p)].items() if k in valid_moves])
                 else :
-                    maxQ_p = max(Q['noSplit'][(p_p,h_p,a_p)].values())
+                    # If you're not allowed to split, you can now only stay or hit.
+                    valid_moves = ["stay", "hit"]
+                    maxQ_p = max([v for k,v in Q['noSplit'][(p_p,h_p,a_p)].items() if k in valid_moves])
                 r = 0
             
             if s :
