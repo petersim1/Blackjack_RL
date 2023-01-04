@@ -33,35 +33,42 @@ def initQ(moves,allCards) :
 
     return Q
 
-def getBestAction(state,policy,epsilon,always_random) :
+def getBestAction(state,policy,epsilon,method) :
+
+    # Can use epsilon = -1 to serve as greedy.
+    # Can use epsilon = 1 to serve as random.
+
+    assert method in ["epsilon", "thompson"], "invalid method selected"
 
     # masking of invalid states
     qDict = {k:v for k,v in state.items() if k in policy}
 
     # softmax
-    if always_random :
+    if method == "thompson" :
         p = np.exp(np.array(list(qDict.values()))) / np.exp(np.array(list(qDict.values()))).sum()
         move = np.random.choice(list(qDict.keys()), p=p)
         return move
     
     # epsilon-greedy
-    n = np.random.rand()
-    if n < epsilon :
-        move = np.random.choice(policy)
-    else :
-        bestMove = [k for k,v in qDict.items() if v==max(list(qDict.values()))]
-        move = np.random.choice(bestMove)
-    
+    if method == "epsilon" :
+        n = np.random.rand()
+        if n < epsilon :
+            move = np.random.choice(policy)
+        else :
+            bestMove = [k for k,v in qDict.items() if v==max(list(qDict.values()))]
+            move = np.random.choice(bestMove)
+
     return move
 
 
-def genEpisode(blackjack,iPlayer,Q,epsilon,always_random) :
+def genEpisode(blackjack,iPlayer,Q,epsilon,method) :
     
     '''
     Inputs :
         - blackjack : module of blackjack gameplay (will contain the state)
         - Q : q values for the state-action pairs
         - epsilon : e-greedy hyperparameter. Explore vs. exploit.
+        - method: Q value selection method
         
     Outputs : 
         - Updated blackjack module
@@ -69,6 +76,8 @@ def genEpisode(blackjack,iPlayer,Q,epsilon,always_random) :
     Returns :
         - s_a_pairs : state-action pairs
     '''
+
+    assert method in ["epsilon", "thompson"], "invalid method selected"
     
     s_a_pairs = [[]]
     
@@ -84,9 +93,10 @@ def genEpisode(blackjack,iPlayer,Q,epsilon,always_random) :
         policy = [p for p in policy if p!='insurance']
         
         if canSplit :
-            move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,epsilon,always_random)
+            qDict = Q['canSplit'][(card1,houseShow,useableAce)]
         else :
-            move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,epsilon,always_random)
+            qDict = Q['noSplit'][(playerShow,houseShow,useableAce)]
+        move = getBestAction(qDict,policy,epsilon,method)
 
         s_a_pairs[nHand].append((playerShow,houseShow,useableAce,canSplit,card1,move))
 
@@ -97,23 +107,25 @@ def genEpisode(blackjack,iPlayer,Q,epsilon,always_random) :
         
     return s_a_pairs
 
-def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr,always_random=False) :
+def learnPolicy(blackjack,Q,Q_N,nPlayers,epsilon,gamma,lr,method="epsilon") :
     
     '''
     epsilon : e-greedy hyperparameter
     gamma : decay factor, which I use to discount rewards for earlier moves in a round
     lr : learning rate to update Q function
-    always_random: allow for random selection of action based on Q values
+    method: Q value selection method
     
     returns :
         learned Q function
     '''
 
+    assert method in ["epsilon", "thompson"], "invalid method selected"
+
     s_a_pairs = []
 
     for i in range(nPlayers) :
 
-        s_a_pairs.append(genEpisode(blackjack,i,Q,epsilon,always_random=always_random))
+        s_a_pairs.append(genEpisode(blackjack,i,Q,epsilon,method))
 
     blackjack.stepHouse() #play the house complete hand.
 
@@ -145,19 +157,22 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr,always_random=False) :
                 # get maximum Q value for s`
                 # in blackjack, after first move, our possible action space is constrained.
                 if s_p:
-                    # If you're able to split, I allow for doubling after the split.
+                    # If you're able to split, state it. I also allow for doubling after the split.
                     valid_moves = ["stay", "hit", "split", "double"]
-                    maxQ_p = max([v for k,v in Q['canSplit'][(c1_p,h_p,a_p)].items() if k in valid_moves])
+                    qDict = Q['canSplit'][(c1_p,h_p,a_p)]
                 else :
                     # If you're not allowed to split, you can now only stay or hit.
                     valid_moves = ["stay", "hit"]
-                    maxQ_p = max([v for k,v in Q['noSplit'][(p_p,h_p,a_p)].items() if k in valid_moves])
+                    qDict = Q['noSplit'][(p_p,h_p,a_p)]
+                maxQ_p = max([v for k,v in qDict.items() if k in valid_moves])
                 r = 0
             
             if s :
                 Q['canSplit'][(c1,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
+                Q_N['canSplit'][(c1,h,a)][m] += 1
             else :
                 Q['noSplit'][(p,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
+                Q_N['noSplit'][(p,h,a)][m] += 1
             
             if j < len(s_a_pairs[i][hand])-1 :
                 j += 1 # move to next player
@@ -165,7 +180,7 @@ def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr,always_random=False) :
                 hand += 1 # move to next hand for a player due to splitting.
                 j = 0
 
-def evaluatePolicy(blackjack,Q,wagers,nRounds,always_random=False) :
+def evaluatePolicy(blackjack,Q,wagers,nRounds) :
     
     rewards = [[] for _ in wagers]
         
@@ -183,9 +198,9 @@ def evaluatePolicy(blackjack,Q,wagers,nRounds,always_random=False) :
                 policy = player.getValidMoves(houseShow)
                 policy = [p for p in policy if p!='insurance']
                 if canSplit:
-                    move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,-1,always_random)
+                    move = getBestAction(Q['canSplit'][(card1,houseShow,useableAce)],policy,-1,"epsilon")
                 else :
-                    move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,-1,always_random)
+                    move = getBestAction(Q['noSplit'][(playerShow,houseShow,useableAce)],policy,-1,"epsilon")
 
                 blackjack.stepPlayer(player,move)
 
