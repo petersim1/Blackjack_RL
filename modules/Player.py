@@ -1,3 +1,5 @@
+from constants import const_rules_common, const_values
+
 '''
 This module is to be used as an individual blackjack player
 It is intended to be wrapped into the Game.py Module, which controls the blackjack game
@@ -11,18 +13,27 @@ class Player:
         - wager : int , initial wager for the player
         - cardValues : dict , represents card values for each card. Should be inhereted from Game.py Module.
     '''
+
+    cardValues = const_values
+    rules_common = const_rules_common
     
-    def __init__(self,wager,cardValues) :
+    def __init__(self,wager, rules={}) :
         
-        self.cardValues = cardValues
         self.cards = [[]]
         
         self.baseWager = wager
         self.wager = [wager]
+
+        self.rules = self.rules_common
+        for k,v in rules.items() :
+            if k in self.rules_common : 
+                assert isinstance(v,bool), "Must have a boolean in rule object."
+                self.rules[k] = v
         
         self.complete = [0]
         self.insured = 0
         self.surrendered = 0
+        self.aces_split = False
     
     def _getCurHand(self) :
         
@@ -44,10 +55,10 @@ class Player:
         iHand = self._getCurHand()
         
         card = self.cards[iHand].pop(-1)
-        self.cards.append([card])
+        self.cards.insert(iHand+1,[card])
         
         self.cards[iHand].append(cards[0])
-        self.cards[-1].append(cards[1])
+        self.cards[iHand+1].append(cards[1])
         
         self.wager.append(self.baseWager)
         self.complete.append(0)
@@ -101,20 +112,21 @@ class Player:
         nHands = len(self.cards)
         n = len(self.cards[iHand])
         
+        canHit = (not self.aces_split) | self.rules["hitAfterSplitAces"]
         canSplit = (n==2) & (self.cards[iHand][0] == self.cards[iHand][1])
         canInsure = (houseShow=='A') & (n==2) & (nHands==1) & (not self.insured)
-        canSurrender = (n==2) & (nHands==1)
-        canDouble = n==2
+        canSurrender = (n==2) & (nHands==1) & (self.rules["allowLateSurrender"])
+        canDouble = (n==2) & (((nHands > 1) & self.rules["doubleAfterSplit"]) | (nHands == 1)) & canHit
                 
         if val < 21 :
-            possibleMoves.extend(['hit','stay'])
-            
+            possibleMoves.append("stay")
+            if canHit : possibleMoves.append("hit")
             if canSplit : possibleMoves.append('split')
             if canInsure : possibleMoves.append('insurance')
             if canSurrender : possibleMoves.append('surrender')
             if canDouble : possibleMoves.append('double')
-        elif val == 21 :
-            possibleMoves.append('stay')
+        if val == 21 :
+            possibleMoves.append("stay")
         
         return possibleMoves
     
@@ -133,7 +145,7 @@ class Player:
         assert len(cardsGive) == self.getNumCardsDraw(move) , 'Must provide proper # of cards!'
         
         iHand = self._getCurHand()
-        
+
         if move == 'hit' :
             self._dealCard(cardsGive[0])
             val,_,_,_ = self.getValue()
@@ -151,6 +163,7 @@ class Player:
             self.insured = 1
 
         if move == 'split' :
+            if (self.cards[iHand][0] == "A") & (self.cards[iHand][1] == "A") : self.aces_split = True
             self._split(cardsGive)
 
         if move == 'surrender' :
@@ -160,6 +173,7 @@ class Player:
     def getResult(self,houseValue,houseCards) :
         
         houseIsBlackjack = (houseValue==21) & (len(houseCards)==2)
+        blackjackPayout = 1.5 if not self.rules["reducedBlackjackPayout"] else 1.2
         
         text = []
         winnings = 0
@@ -176,7 +190,8 @@ class Player:
         for i,cards in enumerate(self.cards) :
             val,_ = self._getValueCards(cards)
             
-            isBlackjack = (val==21) & (len(cards)==2)
+            # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
+            isBlackjack = (val==21) & (len(cards)==2) & (len(self.cards) == 1)
             
             if val > 21 :
                 text.append('bust')
@@ -188,7 +203,7 @@ class Player:
                         text.append('push')
                     else :
                         text.append('blackjack')
-                        winnings += self.wager[i]*1.5
+                        winnings += self.wager[i]*blackjackPayout
                 else :
                     if houseIsBlackjack :
                         text.append('loss')
@@ -197,13 +212,19 @@ class Player:
                         if houseValue == 21 :
                             text.append('push')
                         else :
-                            text.append('win')
-                            winnings += self.wager[i]
+                            if (self.rules["pushDealer22"] and (houseValue == 22)) : 
+                                text.append("push")
+                            else :
+                                text.append('win')
+                                winnings += self.wager[i]
 
             if val < 21 :
                 if houseValue > 21 :
-                    text.append('win')
-                    winnings += self.wager[i]
+                    if (self.rules["pushDealer22"] and (houseValue == 22)) : 
+                        text.append("push")
+                    else :
+                        text.append('win')
+                        winnings += self.wager[i]
                 else :
                     if val > houseValue :
                         text.append('win')

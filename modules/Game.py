@@ -1,4 +1,5 @@
 import numpy as np
+from constants import const_rules_common, const_values, const_cardMap
 
 '''
 This module controls the blackjack gameplay.
@@ -7,21 +8,9 @@ It wraps the Player.py module, which represents each player and the house
 
 class Game :
 
-    cardMap = {i:k for i,k in enumerate(list(range(2,11)) + ['J','Q','K','A'])}
-    cardValues = {k:k for k in range(2,11)}
-    for c in ['J','Q','K'] :
-        cardValues[c] = 10
-    cardValues['A'] = 1
-
-    # Common blackjack rules. Allow for specification in module initialization.
-    rules_common = {
-        "dealerHitSoft17": False,
-        "pushDealer22": False,
-        "doubleAfterSplit": True,
-        "hitAfterSplitAces": False,
-        "reducedBlackjackPayout": False,
-        "allowLateSurrender": True,
-    }
+    cardMap = const_cardMap
+    cardValues = const_values
+    rules_common = const_rules_common
     
     def __init__(
         self,
@@ -76,8 +65,8 @@ class Game :
         Initialize hands of players and house
         '''
         
-        self.players = [self.player(wager,self.cardValues) for wager in self.wagers]
-        self.house = self.player(0,self.cardValues)
+        self.players = [self.player(wager, self.rules) for wager in self.wagers]
+        self.house = self.player(0)
         
     def _updateCount(self,card) :
 
@@ -147,11 +136,11 @@ class Game :
             for player in self.players :
                 card = self._selectCard()
                 player._dealCard(card)
-            card = self._selectCard(updateCount=(1-i)) #first card is shown, 2nd is hidden
+            card = self._selectCard(updateCount=(1-i)) # first card is shown, 2nd is hidden
             self.house._dealCard(card)
         
         house,_,_,_ = self.house.getValue()
-        if house == 21 : self.houseBlackjack = True # If house has blackjack, don't accept bets (except insurance)
+        if house == 21 : self.houseBlackjack = True # If house has blackjack, don't accept moves (except insurance)
         
     def getHouseShow(self,showValue=False) :
         
@@ -164,13 +153,13 @@ class Game :
              
     def stepHouse(self) :
         
-        house,_,_,_ = self.house.getValue()
+        house,_,ace,_ = self.house.getValue()
         self._updateCount(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
         
-        while house < 17 :
+        while (house < 17) or ((house == 17) and ace and self.rules["dealerHitSoft17"]) :
             card = self._selectCard()
             self.house._dealCard(card)
-            house,_,_,_ = self.house.getValue()
+            house,_,ace,_ = self.house.getValue()
             
     def stepPlayer(self,player,move) :
         
