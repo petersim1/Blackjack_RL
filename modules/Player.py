@@ -48,7 +48,9 @@ class Player:
         iHand = self._getCurHand()
         
         self.cards[iHand].append(card)
-        
+
+        if self._getValueCards(self.cards[iHand])[0] >= 21 :
+            self.complete[iHand] = 1        
     
     def _split(self,cards) :
         
@@ -56,12 +58,11 @@ class Player:
         
         card = self.cards[iHand].pop(-1)
         self.cards.insert(iHand+1,[card])
+        self.wager.insert(iHand+1,self.baseWager)
+        self.complete.insert(iHand+1,0)
         
         self.cards[iHand].append(cards[0])
         self.cards[iHand+1].append(cards[1])
-        
-        self.wager.append(self.baseWager)
-        self.complete.append(0)
     
     def _getValueCards(self,cards) :
         
@@ -113,13 +114,14 @@ class Player:
         n = len(self.cards[iHand])
         
         canHit = (not self.aces_split) | self.rules["hitAfterSplitAces"]
+        canStay = (not self.aces_split) | self.rules["hitAfterSplitAces"]
         canSplit = (n==2) & (self.cards[iHand][0] == self.cards[iHand][1])
         canInsure = (houseShow=='A') & (n==2) & (nHands==1) & (not self.insured)
         canSurrender = (n==2) & (nHands==1) & (self.rules["allowLateSurrender"])
         canDouble = (n==2) & (((nHands > 1) & self.rules["doubleAfterSplit"]) | (nHands == 1)) & canHit
                 
         if val < 21 :
-            possibleMoves.append("stay")
+            if canStay: possibleMoves.append("stay")
             if canHit : possibleMoves.append("hit")
             if canSplit : possibleMoves.append('split')
             if canInsure : possibleMoves.append('insurance')
@@ -148,23 +150,25 @@ class Player:
 
         if move == 'hit' :
             self._dealCard(cardsGive[0])
-            val,_,_,_ = self.getValue()
-            if val >= 21 :
-                self.complete[iHand] = 1
                 
         if move == 'stay' :
             self.complete[iHand] = 1
+
         if move == 'double' :
             self.wager[iHand] *= 2
             self._dealCard(cardsGive[0])
-            
             self.complete[iHand] = 1
+
         if move == 'insurance' :
             self.insured = 1
 
         if move == 'split' :
             if (self.cards[iHand][0] == "A") & (self.cards[iHand][1] == "A") : self.aces_split = True
             self._split(cardsGive)
+            if (not self.rules["hitAfterSplitAces"]) and self.aces_split :
+                if cardsGive[0] != "A" : self.complete[iHand] = 1
+                if cardsGive[1] != "A" : self.complete[iHand+1] = 1
+
 
         if move == 'surrender' :
             self.surrendered = 1

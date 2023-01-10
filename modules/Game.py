@@ -87,7 +87,7 @@ class Game :
             self.cards[ind] -= 1
             self.nCardsPlayed += 1
         
-        if self.nCardsPlayed == self.stopCard :
+        if (self.nCardsPlayed == self.stopCard) & self.shrinkDeck :
             if self.verbose :
                 print('Stop Card Hit, resetting deck after this round')
             self.resetDeckAfterRound = True
@@ -139,7 +139,7 @@ class Game :
             card = self._selectCard(updateCount=(1-i)) # first card is shown, 2nd is hidden
             self.house._dealCard(card)
         
-        house,_,_,_ = self.house.getValue()
+        house,_ = self.house._getValueCards(self.house.cards[0])
         if house == 21 : self.houseBlackjack = True # If house has blackjack, don't accept moves (except insurance)
         
     def getHouseShow(self,showValue=False) :
@@ -153,13 +153,13 @@ class Game :
              
     def stepHouse(self) :
         
-        house,_,ace,_ = self.house.getValue()
+        house, ace = self.house._getValueCards(self.house.cards[0])
         self._updateCount(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
         
         while (house < 17) or ((house == 17) and ace and self.rules["dealerHitSoft17"]) :
             card = self._selectCard()
             self.house._dealCard(card)
-            house,_,ace,_ = self.house.getValue()
+            house, ace = self.house._getValueCards(self.house.cards[0])
             
     def stepPlayer(self,player,move) :
         
@@ -172,7 +172,7 @@ class Game :
     
     def getResults(self) :
         
-        house,_,_,_ = self.house.getValue()
+        house,_ = self.house._getValueCards(self.house.cards[0])
         
         players = []
         winnings = []

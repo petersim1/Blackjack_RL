@@ -75,11 +75,13 @@ def genEpisode(blackjack,iPlayer,Q,epsilon,method) :
     
     Returns :
         - s_a_pairs : state-action pairs
+        - action_space : conditional action space based off state.
     '''
 
     assert method in ["epsilon", "thompson"], "invalid method selected"
     
     s_a_pairs = [[]]
+    action_space = [[]]
     
     player = blackjack.players[iPlayer]
     houseShow = blackjack.getHouseShow(showValue=True)
@@ -91,6 +93,7 @@ def genEpisode(blackjack,iPlayer,Q,epsilon,method) :
 
         policy = player.getValidMoves(houseShow)
         policy = [p for p in policy if p!='insurance']
+        action_space[nHand].append((policy))
         
         if canSplit :
             qDict = Q['canSplit'][(card1,houseShow,useableAce)]
@@ -102,12 +105,13 @@ def genEpisode(blackjack,iPlayer,Q,epsilon,method) :
 
         if move == 'split' :
             s_a_pairs.append(s_a_pairs[nHand].copy())
+            action_space.append(action_space[nHand].copy())
 
         blackjack.stepPlayer(player,move)
         
-    return s_a_pairs
+    return s_a_pairs, action_space
 
-def learnPolicy(blackjack,Q,Q_N,nPlayers,epsilon,gamma,lr,method="epsilon") :
+def learnPolicy(blackjack,Q,nPlayers,epsilon,gamma,lr,method="epsilon") :
     
     '''
     epsilon : e-greedy hyperparameter
@@ -122,10 +126,14 @@ def learnPolicy(blackjack,Q,Q_N,nPlayers,epsilon,gamma,lr,method="epsilon") :
     assert method in ["epsilon", "thompson"], "invalid method selected"
 
     s_a_pairs = []
+    conditional_action_space = []
 
     for i in range(nPlayers) :
 
-        s_a_pairs.append(genEpisode(blackjack,i,Q,epsilon,method))
+        s_a, action_space = genEpisode(blackjack,i,Q,epsilon,method)
+
+        s_a_pairs.append(s_a)
+        conditional_action_space.append(action_space)
 
     blackjack.stepHouse() #play the house complete hand.
 
@@ -137,45 +145,44 @@ def learnPolicy(blackjack,Q,Q_N,nPlayers,epsilon,gamma,lr,method="epsilon") :
         j = 0
         hand = 0
         # some additional logic is required to account for splitting of hands + multiple players.
-        while hand < len(s_a_pairs[i]) :
+        while (hand < len(s_a_pairs[i])) :
             
             # current state-action pair 
             # (player,house,useableAce,canSplit,card_1,move)
+            if not s_a_pairs[i][hand] : break # means that blackjack was drawn.
             p,h,a,s,c1,m = s_a_pairs[i][hand][j]
             if s :
                 oldQ = Q['canSplit'][(c1,h,a)][m] # Q value for current state-action pair if canSplit
             else :
                 oldQ = Q['noSplit'][(p,h,a)][m] # Q value for current state-action pair if cannotSplit
             
-            r = w
+            # I noticed that split rewards were getting double counted. Correct for this.
+            r = w/len(s_a_pairs[i])
             maxQ_p = 0
             # If we are not in a terminal state, a reward of zero is given.
             # In blackjack, we aren't penalized or rewarded for additional moves. We only care about final outcome.
             # Also, if we are in a terminal state, there is no s`, so we define it as zero.
             if (j+1) < len(s_a_pairs[i][hand]) :
                 p_p,h_p,a_p,s_p,c1_p,_ = s_a_pairs[i][hand][j+1]
+                action_space = conditional_action_space[i][hand][j+1]
                 # get maximum Q value for s`
                 # in blackjack, after first move, our possible action space is constrained.
                 if s_p:
                     # If you're able to split, state it. I also allow for doubling after the split.
-                    valid_moves = ["stay", "hit", "split", "double"]
                     qDict = Q['canSplit'][(c1_p,h_p,a_p)]
                 else :
                     # If you're not allowed to split, you can now only stay or hit.
-                    valid_moves = ["stay", "hit"]
                     qDict = Q['noSplit'][(p_p,h_p,a_p)]
-                maxQ_p = max([v for k,v in qDict.items() if k in valid_moves])
+                maxQ_p = max([v for k,v in qDict.items() if k in action_space])
                 r = 0
             
             if s :
                 Q['canSplit'][(c1,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
-                Q_N['canSplit'][(c1,h,a)][m] += 1
             else :
                 Q['noSplit'][(p,h,a)][m] = oldQ + lr*(r + gamma*maxQ_p - oldQ)
-                Q_N['noSplit'][(p,h,a)][m] += 1
             
             if j < len(s_a_pairs[i][hand])-1 :
-                j += 1 # move to next player
+                j += 1 # move to next state-action pair within a hand.
             else : 
                 hand += 1 # move to next hand for a player due to splitting.
                 j = 0
