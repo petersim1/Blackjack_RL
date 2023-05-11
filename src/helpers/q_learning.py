@@ -221,3 +221,6 @@ def evaluatePolicy(blackjack,Q,wagers,nRounds) :
             rewards[i].append(w)
 
     return rewards
+
+
+__all__ = ["initQ", "getBestAction", "genEpisode", "learnPolicy", "evaluatePolicy"]

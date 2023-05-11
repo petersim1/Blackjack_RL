@@ -126,3 +126,6 @@ def recursePlayer(cards,house,cardMap,cardValues) :
     recursion([],cards,'',house)
 
     return seriesOut
+
+
+__all__ = ["getReward", "selectCard", "getValue", "dealHouse", "recursePlayer"]

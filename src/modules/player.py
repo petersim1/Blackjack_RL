@@ -1,4 +1,4 @@
-from constants import const_rules_common, const_values
+from src.constants import const_rules_common, const_values
 
 '''
 This module is to be used as an individual blackjack player

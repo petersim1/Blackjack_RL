@@ -1,5 +1,5 @@
 {
-  "python.defaultInterpreterPath": "/Users/petersimone/opt/anaconda3/bin",
+  "python.defaultInterpreterPath": "/Users/petersimone/opt/anaconda3/bin/python",
   "python.envFile": "${workspaceFolder}/.env",
   "editor.tabSize": 4,
   "editor.detectIndentation": false,

@@ -1,5 +1,6 @@
 import numpy as np
-from constants import const_rules_common, const_values, const_cardMap
+from src.constants import const_rules_common, const_values, const_cardMap
+from src.modules.player import Player
 
 '''
 This module controls the blackjack gameplay.
@@ -14,7 +15,6 @@ class Game :
     
     def __init__(
         self,
-        playerModule,
         shrinkDeck=True,
         nDecks=6,
         ratioPenetrate=4/6,
@@ -40,8 +40,6 @@ class Game :
         self.nRoundsPlayed = 0
         self.resetDeckAfterRound = False
         self.roundInit = False
-        
-        self.player = playerModule
 
         self.rules = self.rules_common
         for k,v in rules.items() :
@@ -65,8 +63,8 @@ class Game :
         Initialize hands of players and house
         '''
         
-        self.players = [self.player(wager, self.rules) for wager in self.wagers]
-        self.house = self.player(0)
+        self.players = [Player(wager, self.rules) for wager in self.wagers]
+        self.house = Player(0)
         
     def _updateCount(self,card) :
 

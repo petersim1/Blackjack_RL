@@ -52,3 +52,4 @@ def dfBestMove(array,moves,pairsSplit,colorBox=True) :
 
     return noAce,yesAce,canSplit
 
+__all__ = ["dfBestMove"]
