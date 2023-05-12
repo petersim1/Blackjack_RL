@@ -1,139 +1,115 @@
-from src.constants import const_rules_common, const_values
+from typing import List, Union, Optional, Tuple
 
-'''
-This module is to be used as an individual blackjack player
-It is intended to be wrapped into the Game.py Module, which controls the blackjack game
-'''
+from src.constants import card_values
+from src.pydantic_types import RulesI
 
 
-class Player: 
+class Player:
+    """
+    This module is to be used as an individual blackjack player
+    It is intended to be wrapped into the Game module, which controls the blackjack game.
+
+    In the Game module, in each round, this module is reset.
+    """
     
-    '''
-    Inputs : 
-        - wager : int , initial wager for the player
-        - cardValues : dict , represents card values for each card. Should be inhereted from Game.py Module.
-    '''
-
-    cardValues = const_values
-    rules_common = const_rules_common
-    
-    def __init__(self,wager, rules={}) :
+    def __init__(self, wager: float, rules: object={}) -> None :
         
-        self.cards = [[]]
+        self.cards: List[List[Union[int,str]]] = [[]]
         
-        self.baseWager = wager
+        self.base_wager = wager
         self.wager = [wager]
+        self.rules = RulesI(**rules)
 
-        self.rules = self.rules_common
-        for k,v in rules.items() :
-            if k in self.rules_common : 
-                assert isinstance(v,bool), "Must have a boolean in rule object."
-                self.rules[k] = v
-        
-        self.complete = [0]
-        self.insured = 0
-        self.surrendered = 0
+        self.complete = [False]
+        self.insured = False
+        self.surrendered = False
         self.aces_split = False
-    
-    def _getCurHand(self) :
-        
-        return self.complete.index(0) if 0 in self.complete else None
-    
-    def _allComplete(self) :
-        
-        return not self.complete.count(0)
-    
-    def _dealCard(self,card) :
-        
-        iHand = self._getCurHand()
-        
-        self.cards[iHand].append(card)
 
-        if self._getValueCards(self.cards[iHand])[0] >= 21 :
-            self.complete[iHand] = 1        
     
-    def _split(self,cards) :
-        
-        iHand = self._getCurHand()
-        
-        card = self.cards[iHand].pop(-1)
-        self.cards.insert(iHand+1,[card])
-        self.wager.insert(iHand+1,self.baseWager)
-        self.complete.insert(iHand+1,0)
-        
-        self.cards[iHand].append(cards[0])
-        self.cards[iHand+1].append(cards[1])
+    def _get_cur_hand(self) -> Optional[int]:
+        return self.complete.index(False) if False in self.complete else None
     
-    def _getValueCards(self,cards) :
-        
-        useableAce = False
-        
-        total = sum([self.cardValues[card] for card in cards])
+
+    def _all_complete(self) -> bool:
+        return not self.complete.count(False)
     
+
+    def _deal_card(self, card: Union[int, str]) -> None:
+        i_hand = self._get_cur_hand()
+        self.cards[i_hand].append(card)
+        if self._get_value_cards(self.cards[i_hand])[0] >= 21 :
+            self.complete[i_hand] = True
+    
+
+    def _split(self, cards: List[Union[int, str]]) -> None:
+        i_hand = self._get_cur_hand()
+        card = self.cards[i_hand].pop(-1)
+        self.cards.insert(i_hand+1,[card])
+        self.wager.insert(i_hand+1,self.base_wager)
+        self.complete.insert(i_hand+1,False)
+        
+        self.cards[i_hand].append(cards[0])
+        self.cards[i_hand+1].append(cards[1])
+    
+
+    def _get_value_cards(self, cards: List[Union[int, str]]) -> Tuple[int, bool] :
+        useable_ace = False
+        total = sum([card_values[card] for card in cards])
         if cards.count('A') :
             if total <= 11 :
                 total += 10
-                useableAce = True
-
-        return total,useableAce
+                useable_ace = total < 21
+        return total, useable_ace
     
-    def getValue(self) :
-        
-        iHand = self._getCurHand()
-        n = len(self.cards[iHand])
 
-        canSplit = (n==2) & (self.cards[iHand][0] == self.cards[iHand][1])
-        useableAce = False
+    def get_value(self) -> Tuple[int, bool, bool, Optional[Union[int, str]]]:
+        i_hand = self._get_cur_hand()
+        n = len(self.cards[i_hand])
+        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
+        useable_ace = False
         c1 = None
-        if canSplit :
-            c1 = self.cards[iHand][0]
+        if can_split :
+            c1 = self.cards[i_hand][0]
             if c1 in ['J','Q','K'] :
                 c1 = 10
-        
-        total = sum([self.cardValues[card] for card in self.cards[iHand]])
-    
-        if self.cards[iHand].count('A') :
-            if total <= 11 :
-                total += 10
-                useableAce = True if total < 21 else False
 
-        return total,canSplit,useableAce,c1
+        total, useable_ace = self._get_value_cards(self.cards[i_hand])
+
+        return total, can_split, useable_ace, c1
         
          
-    def getValidMoves(self,houseShow) :
+    def get_valid_moves(self, house_show: Union[int,str]) -> List[str] :
+        possible_moves = []
+        i_hand = self._get_cur_hand()
+        if i_hand is None :
+            return possible_moves
         
-        possibleMoves = []
+        val, _, _, _ = self.get_value()
         
-        iHand = self._getCurHand()
-        if iHand is None :
-            return possibleMoves
+        n_hands = len(self.cards)
+        n = len(self.cards[i_hand])
         
-        val,_,_,_ = self.getValue()
-        
-        nHands = len(self.cards)
-        n = len(self.cards[iHand])
-        
-        canHit = (not self.aces_split) | self.rules["hitAfterSplitAces"]
-        canStay = (not self.aces_split) | self.rules["hitAfterSplitAces"]
-        canSplit = (n==2) & (self.cards[iHand][0] == self.cards[iHand][1])
-        canInsure = (houseShow=='A') & (n==2) & (nHands==1) & (not self.insured)
-        canSurrender = (n==2) & (nHands==1) & (self.rules["allowLateSurrender"])
-        canDouble = (n==2) & (((nHands > 1) & self.rules["doubleAfterSplit"]) | (nHands == 1)) & canHit
+        can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
+        can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
+        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
+        can_insure = (house_show=='A') & (n==2) & (n_hands==1) & (not self.insured)
+        can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_late_surrender)
+        can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
         if val < 21 :
-            if canStay: possibleMoves.append("stay")
-            if canHit : possibleMoves.append("hit")
-            if canSplit : possibleMoves.append('split')
-            if canInsure : possibleMoves.append('insurance')
-            if canSurrender : possibleMoves.append('surrender')
-            if canDouble : possibleMoves.append('double')
+            if can_stay: possible_moves.append("stay")
+            if can_hit : possible_moves.append("hit")
+            if can_split : possible_moves.append('split')
+            if can_insure : possible_moves.append('insurance')
+            if can_surrender : possible_moves.append('surrender')
+            if can_double : possible_moves.append('double')
         if val == 21 :
-            possibleMoves.append("stay")
+            possible_moves.append("stay")
         
-        return possibleMoves
+        return possible_moves
     
-    def getNumCardsDraw(self,move) :
-        
+    
+    def get_num_cards_draw(self, move: str) -> int :
         if move in ['hit','double'] :
             return 1
         if move == 'split' :
@@ -141,115 +117,104 @@ class Player:
         
         return 0
     
-    def step(self,move,cardsGive=[]) :
+    
+    def step(self, move: str, cards_give: List[Union[int, str]]=[]) -> None:
+        assert not self._all_complete() , 'Player cannot move anymore!'
+        assert len(cards_give) == self.get_num_cards_draw(move) , 'Must provide proper # of cards!'
         
-        assert not self._allComplete() , 'Player cannot move anymore!'
-        assert len(cardsGive) == self.getNumCardsDraw(move) , 'Must provide proper # of cards!'
-        
-        iHand = self._getCurHand()
+        i_hand = self._get_cur_hand()
+        if move == 'hit':
+            self._deal_card(cards_give[0]) 
+        if move == 'stay':
+            self.complete[i_hand] = True
+        if move == 'double':
+            self.wager[i_hand] *= 2
+            self._deal_card(cards_give[0])
+            self.complete[i_hand] = True
+        if move == 'insurance':
+            self.insured = True
+        if move == 'split':
+            self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
+            self._split(cards_give)
+            if (not self.rules.hit_after_split_aces) and self.aces_split :
+                if cards_give[0] != "A":
+                    self.complete[i_hand] = True
+                if cards_give[1] != "A":
+                    self.complete[i_hand+1] = True
+        if move == 'surrender':
+            self.surrendered = True
+            self.complete[i_hand] = True
 
-        if move == 'hit' :
-            self._dealCard(cardsGive[0])
-                
-        if move == 'stay' :
-            self.complete[iHand] = 1
-
-        if move == 'double' :
-            self.wager[iHand] *= 2
-            self._dealCard(cardsGive[0])
-            self.complete[iHand] = 1
-
-        if move == 'insurance' :
-            self.insured = 1
-
-        if move == 'split' :
-            if (self.cards[iHand][0] == "A") & (self.cards[iHand][1] == "A") : self.aces_split = True
-            self._split(cardsGive)
-            if (not self.rules["hitAfterSplitAces"]) and self.aces_split :
-                if cardsGive[0] != "A" : self.complete[iHand] = 1
-                if cardsGive[1] != "A" : self.complete[iHand+1] = 1
-
-
-        if move == 'surrender' :
-            self.surrendered = 1
-            self.complete[iHand] = 1
             
-    def getResult(self,houseValue,houseCards) :
-        
-        houseIsBlackjack = (houseValue==21) & (len(houseCards)==2)
-        blackjackPayout = 1.5 if not self.rules["reducedBlackjackPayout"] else 1.2
+    def get_result(self, house_value: int, house_cards: List[Union[int, str]]) -> Tuple[List[str], float] :
+        house_is_blackjack = (house_value==21) & (len(house_cards)==2)
+        blackjack_payout = 1.5 if not self.rules.reduced_blackjack_payout else 1.2
         
         text = []
         winnings = 0
-        
         if self.insured :
-            if houseIsBlackjack : # insurance pays out 2:1
-                winnings += self.baseWager 
+            if house_is_blackjack : # insurance pays out 2:1
+                winnings += self.base_wager 
             else :
-                winnings -= self.baseWager/2
-        
+                winnings -= self.base_wager/2
         if self.surrendered :
-            return [['surrender'],winnings-self.baseWager/2]
-        
+            return [['surrender'], winnings-self.base_wager/2]
         for i,cards in enumerate(self.cards) :
-            val,_ = self._getValueCards(cards)
-            
+            val,_ = self._get_value_cards(cards)
             # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
-            isBlackjack = (val==21) & (len(cards)==2) & (len(self.cards) == 1)
+            is_blackjack = (val==21) & (len(cards)==2) & (len(self.cards) == 1)
             
             if val > 21 :
                 text.append('bust')
                 winnings -= self.wager[i]
-            
             if val == 21 :
-                if isBlackjack :
-                    if houseIsBlackjack :
+                if is_blackjack :
+                    if house_is_blackjack :
                         text.append('push')
                     else :
                         text.append('blackjack')
-                        winnings += self.wager[i]*blackjackPayout
+                        winnings += self.wager[i]*blackjack_payout
                 else :
-                    if houseIsBlackjack :
+                    if house_is_blackjack :
                         text.append('loss')
                         winnings -= self.wager[i]
                     else :
-                        if houseValue == 21 :
+                        if house_value == 21 :
                             text.append('push')
                         else :
-                            if (self.rules["pushDealer22"] and (houseValue == 22)) : 
+                            if (self.rules.push_dealer22 and (house_value == 22)) : 
                                 text.append("push")
                             else :
                                 text.append('win')
                                 winnings += self.wager[i]
 
             if val < 21 :
-                if houseValue > 21 :
-                    if (self.rules["pushDealer22"] and (houseValue == 22)) : 
+                if house_value > 21 :
+                    if (self.rules.push_dealer22 and (house_value == 22)) : 
                         text.append("push")
                     else :
                         text.append('win')
                         winnings += self.wager[i]
                 else :
-                    if val > houseValue :
+                    if val > house_value :
                         text.append('win')
                         winnings += self.wager[i]
-                    elif val < houseValue :
+                    elif val < house_value :
                         text.append('loss')
                         winnings -= self.wager[i]
                     else :
                         text.append('push')
         
-        return text,winnings
+        return text, winnings
         
             
-    def isMoveValid(self,move,houseShow) :
+    def is_move_valid(self, move: str, house_show: int) -> bool :
+        return move in self.get_valid_moves(house_show)
         
-        return move in self.getValidMoves(houseShow)
-            
-    def getCards(self) :
-        
+
+    def get_cards(self) -> List[List[Union[int, str]]] :
         return self.cards
         
-    def isDone(self) :
-        
-        return self._allComplete()
+
+    def is_done(self) -> bool:
+        return self._all_complete()

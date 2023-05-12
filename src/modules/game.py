@@ -1,101 +1,77 @@
 import numpy as np
-from src.constants import const_rules_common, const_values, const_cardMap
+from typing import List, Union, Tuple
+from src.constants import card_values, card_map
 from src.modules.player import Player
+from src.pydantic_types import RulesI
 
-'''
-This module controls the blackjack gameplay.
-It wraps the Player.py module, which represents each player and the house
-'''
 
 class Game :
 
-    cardMap = const_cardMap
-    cardValues = const_values
-    rules_common = const_rules_common
-    
-    def __init__(
-        self,
-        shrinkDeck=True,
-        nDecks=6,
-        ratioPenetrate=4/6,
-        verbose=True,
-        rules={}
-    ) :
-        
-        '''
-        Input :
-            - playerModule : class , uninitialized Player module from Player.py
-            - shrinkDeck : boolean , whether or not to remove selected cards from deck. If False, each card is drawn iid.
-            - nDecks : number of decks to play with (default is 6, which is typical)
-            - ratioPenetrate : ratio of cards that are playable (default is 2/3 of 6 decks). Only applicable when shrinkDeck == True.
-            - verbose : boolean , whether to print when deck is cut / reshuffled.
-            
-            MUST call initRound() to start the round
-        '''
-        
-        self.shrinkDeck = shrinkDeck # if False, will randomly select cards uniformly, and deck won't run out.
-        self.verbose = verbose
-        self.nDecks = nDecks
-        self.ratioPenetrate = ratioPenetrate
-        self.nRoundsPlayed = 0
-        self.resetDeckAfterRound = False
-        self.roundInit = False
+    """
+    This module controls the blackjack gameplay.
+    It wraps the Player.py module, which represents each player and the house 
 
-        self.rules = self.rules_common
-        for k,v in rules.items() :
-            if k in self.rules_common : 
-                assert isinstance(v,bool), "Must have a boolean in rule object."
-                self.rules[k] = v
+    Input :
+        - player_module : class , uninitialized Player module from Player.py
+        - shrink_deck : boolean , whether or not to remove selected cards from deck. If False, each card is drawn iid.
+        - n_decks : number of decks to play with (default is 6, which is typical)
+        - ratio_penetrate : ratio of cards that are playable (default is 2/3 of 6 decks). Only applicable when shrinkDeck == True.
         
-        self._initDeck()
-            
-    def _initDeck(self) :
+        MUST call init_round() to start the round
+    """
+    
+    def __init__(self, shrink_deck: bool=True, n_decks: int=6, ratio_penetrate: float=4/6, rules: object={}) -> None:
         
-        self.cards = np.array([self.nDecks*4]*len(self.cardMap))
+        self.shrink_deck = shrink_deck # if False, will randomly select cards uniformly, and deck won't run out.
+        self.n_decks = n_decks
+        self.ratio_penetrate = ratio_penetrate
+        self.n_rounds_played = 0
+        self.reset_deck_after_round = False
+        self.round_init = False
+        self.rules = RulesI(**rules)
+        
+        self._init_deck()
+
             
-        self.nCardsPlayed = 0 # In THIS deck.
+    def _init_deck(self) -> None:
+        self.cards = np.array([self.n_decks*4]*len(card_map))
+        self.n_cards_played = 0 # In THIS deck.
         self.count = 0
-        self.stopCard = int(self.nDecks*52*self.ratioPenetrate)
+        self.stop_card = int(self.n_decks*52*self.ratio_penetrate)
         
-    def _initPlayers(self) :
-        
-        '''
-        Initialize hands of players and house
-        '''
-        
-        self.players = [Player(wager, self.rules) for wager in self.wagers]
-        self.house = Player(0)
-        
-    def _updateCount(self,card) :
 
-        if self.cardValues[card] == 1 :
+    def _init_players(self) -> None :
+        self.players: List[type[Player]] = [Player(wager=wager, rules=self.rules.dict()) for wager in self.wagers]
+        self.house: type[Player] = Player(0)
+        
+
+    def _update_count(self, card: Union[int, str]) -> None :
+        if card_values[card] == 1 :
             self.count -= 1
         
-        if 2 <= self.cardValues[card] <=6 :
+        if 2 <= card_values[card] <=6 :
             self.count += 1
-        if self.cardValues[card] >= 10 :
+        if card_values[card] >= 10 :
             self.count -= 1
+
             
-    def _selectCard(self,updateCount=True) :
-        
-        ind = np.random.choice(list(self.cardMap.keys()),p=self.cards/self.cards.sum())
-    
-        card = self.cardMap[ind]
-        if self.shrinkDeck :
+    def _select_card(self, update_count: bool=True) -> Union[int, str]:
+        ind = np.random.choice(list(card_map.keys()),p=self.cards/self.cards.sum())
+        card = card_map[ind]
+        if self.shrink_deck :
             self.cards[ind] -= 1
-            self.nCardsPlayed += 1
+            self.n_cards_played += 1
         
-        if (self.nCardsPlayed == self.stopCard) & self.shrinkDeck :
-            if self.verbose :
-                print('Stop Card Hit, resetting deck after this round')
-            self.resetDeckAfterRound = True
+        if (self.n_cards_played == self.stop_card) & self.shrink_deck :
+            self.reset_deck_after_round = True
         
-        if updateCount :
-            self._updateCount(card)
+        if update_count :
+            self._update_count(card)
         
         return card
         
-    def initRound(self,wagers) :
+
+    def init_round(self, wagers: List[float]) -> None :
         
         '''
         - Calls to reset the player / house cards
@@ -103,82 +79,76 @@ class Game :
         '''
         self.wagers = wagers
         
-        self._initPlayers()
+        self._init_players()
         
-        self.nRoundsPlayed += 1
-        self.roundInit = True
-        self.houseBlackjack = False
+        self.n_rounds_played += 1
+        self.round_init = True
+        self.house_blackjack = False
         
-        if self.resetDeckAfterRound : 
-            if self.verbose :
-                print('shuffling deck')
-            self._initDeck()
-            self.resetDeckAfterRound = False
+        if self.reset_deck_after_round : 
+            self._init_deck()
+            self.reset_deck_after_round = False
         
-    def resetGame(self) :
+
+    def reset_game(self) -> None:
+        """Resets the entire game. ie game is over, reset module."""
         
-        '''
-        Resets the entire game. ie game is over, reset module.
-        '''
-        
-        self._initDeck()
+        self._init_deck()
         self.players = []
         self.house = None
         self.nRoundsPlayed = 0      
         
-    def dealInit(self) :
+
+    def deal_init(self) -> None:
         
-        assert self.roundInit , 'Must initialize round before dealing'
+        assert self.round_init , 'Must initialize round before dealing'
 
         for i in range(2) :
             for player in self.players :
-                card = self._selectCard()
-                player._dealCard(card)
-            card = self._selectCard(updateCount=(1-i)) # first card is shown, 2nd is hidden
-            self.house._dealCard(card)
+                card = self._select_card()
+                player._deal_card(card)
+            card = self._select_card(update_count=(1-i)) # first card is shown, 2nd is hidden
+            self.house._deal_card(card)
         
-        house,_ = self.house._getValueCards(self.house.cards[0])
-        if house == 21 : self.houseBlackjack = True # If house has blackjack, don't accept moves (except insurance)
+        house,_ = self.house._get_value_cards(self.house.cards[0])
+        if house == 21 :
+            self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance)
         
-    def getHouseShow(self,showValue=False) :
+
+    def get_house_show(self, show_value: bool=False) -> Union[int, str] :
         
-        assert len(self.house.getCards()[0]) , 'House has not been dealt yet'
+        assert len(self.house.get_cards()[0]) , 'House has not been dealt yet'
         
-        card = self.house.getCards()[0][0]
-        if showValue :
-            return self.cardValues[card] if card != 'A' else 11
+        card = self.house.get_cards()[0][0]
+        if show_value :
+            return card_values[card] if card != 'A' else 11
         return card
              
-    def stepHouse(self) :
+
+    def step_house(self) -> None :
         
-        house, ace = self.house._getValueCards(self.house.cards[0])
-        self._updateCount(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
+        house, ace = self.house._get_value_cards(self.house.cards[0])
+        self._update_count(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
         
-        while (house < 17) or ((house == 17) and ace and self.rules["dealerHitSoft17"]) :
-            card = self._selectCard()
-            self.house._dealCard(card)
-            house, ace = self.house._getValueCards(self.house.cards[0])
+        while (house < 17) or ((house == 17) and ace and self.rules.dealer_hit_soft17) :
+            card = self._select_card()
+            self.house._deal_card(card)
+            house, ace = self.house._get_value_cards(self.house.cards[0])
             
-    def stepPlayer(self,player,move) :
-        
-        n = player.getNumCardsDraw(move)
-        
-        cards = [self._selectCard() for _ in range(n)]
-        
+
+    def step_player(self, player: type[Player], move: str) -> None :
+        n = player.get_num_cards_draw(move)
+        cards = [self._select_card() for _ in range(n)]
         player.step(move,cards)
         
     
-    def getResults(self) :
-        
-        house,_ = self.house._getValueCards(self.house.cards[0])
-        
+    def get_results(self) -> Tuple[List[List[str]], List[float]]:
+        house,_ = self.house._get_value_cards(self.house.cards[0])
         players = []
         winnings = []
         for player in self.players :
-            
-            text,win = player.getResult(house,self.house.cards)
+            text,win = player.get_result(house,self.house.cards)
             players.append(text)
             winnings.append(win)
-            
                 
         return players,winnings
