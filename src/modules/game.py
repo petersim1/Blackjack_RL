@@ -110,7 +110,7 @@ class Game :
             card = self._select_card(update_count=(1-i)) # first card is shown, 2nd is hidden
             self.house._deal_card(card)
         
-        house,_ = self.house._get_value_cards(self.house.cards[0])
+        house, _, _ = self.house.get_value()
         if house == 21 :
             self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance + surrender)
         
@@ -127,13 +127,13 @@ class Game :
 
     def step_house(self) -> None :
         
-        house, ace = self.house._get_value_cards(self.house.cards[0])
+        house, ace, _ = self.house.get_value()
         self._update_count(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
         
         while (house < 17) or ((house == 17) and ace and self.rules.dealer_hit_soft17) :
             card = self._select_card()
             self.house._deal_card(card)
-            house, ace = self.house._get_value_cards(self.house.cards[0])
+            house, ace, _ = self.house.get_value()
             
 
     def step_player(self, player: type[Player], move: str) -> None :

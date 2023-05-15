@@ -6,7 +6,6 @@ class StateActionPair(BaseModel):
     house_show: int
     useable_ace: bool
     can_split: bool
-    card1: Optional[Union[int,str]]
     move: str
 
 class RulesI(BaseModel):

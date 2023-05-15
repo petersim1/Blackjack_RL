@@ -28,16 +28,13 @@ def gen_episode(
 
     while not player.is_done() :
 
-        player_total, can_split, useable_ace, card1 = player.get_value()
+        player_total, useable_ace, can_split = player.get_value()
         nHand = player._get_cur_hand() # need this for isolating "split" moves.
 
         policy = player.get_valid_moves()
         conditional_action_spaces[nHand].append((policy))
-        
-        if can_split :
-            q_dict = q["can_split"][(card1, house_show, useable_ace)]
-        else :
-            q_dict = q["no_split"][(player_total, house_show, useable_ace)]
+
+        q_dict = q[(player_total, house_show, useable_ace, can_split)]
         move = select_action(state=q_dict, policy=policy, epsilon=epsilon, method=method)
 
         s_a_pair = StateActionPair(
@@ -45,7 +42,6 @@ def gen_episode(
             house_show=house_show,
             useable_ace=useable_ace,
             can_split=can_split,
-            card1=card1,
             move=move
         )
         s_a_pairs[nHand].append(s_a_pair)
@@ -109,19 +105,17 @@ def learn_policy(
         while (hand < len(s_a_pairs[i])):
             if s_a_pairs[i][hand]:
                 s_a_pair = s_a_pairs[i][hand][j]
-                if s_a_pair.can_split:
-                    old_q = q["can_split"][(s_a_pair.card1, s_a_pair.house_show, s_a_pair.useable_ace)]
-                else :
-                    old_q = q["no_split"][(s_a_pair.player_show, s_a_pair.house_show, s_a_pair.useable_ace)]
+
+                old_q = q[(s_a_pair.player_show, s_a_pair.house_show, s_a_pair.useable_ace, s_a_pair.can_split)]
+
                 r = player_winnings[hand]
                 max_q_p = 0
                 if (j+1) < len(s_a_pairs[i][hand]):
                     s_a_pair_p = s_a_pairs[i][hand][j+1]
                     action_space = conditional_action_space[i][hand][j+1]
-                    if s_a_pair_p.can_split:
-                        q_dict = q["can_split"][(s_a_pair_p.card1, s_a_pair_p.house_show, s_a_pair_p.useable_ace)]
-                    else:
-                        q_dict = q["no_split"][(s_a_pair_p.player_show, s_a_pair_p.house_show, s_a_pair_p.useable_ace)]
+
+                    q_dict = q[(s_a_pair_p.player_show, s_a_pair_p.house_show, s_a_pair_p.useable_ace, s_a_pair_p.can_split)]
+                    
                     max_q_p = max([v for k,v in q_dict.items() if k in action_space])
                     r = 0
                 old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr*(r + gamma * max_q_p - old_q[s_a_pair.move])

@@ -68,20 +68,14 @@ class Player:
         return total, useable_ace
     
 
-    def get_value(self) -> Tuple[int, bool, bool, Optional[Union[int, str]]]:
+    def get_value(self) -> Tuple[int, bool, bool]:
         i_hand = self._get_cur_hand()
         n = len(self.cards[i_hand])
         can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
-        useable_ace = False
-        c1 = None
-        if can_split :
-            c1 = self.cards[i_hand][0]
-            if c1 in ['J','Q','K'] :
-                c1 = 10
 
         total, useable_ace = self._get_value_cards(self.cards[i_hand])
 
-        return total, can_split, useable_ace, c1
+        return total, useable_ace, can_split
         
          
     def get_valid_moves(self) -> List[str] :
@@ -90,14 +84,13 @@ class Player:
         if i_hand is None :
             return possible_moves
         
-        val, _ = self._get_value_cards(self.cards[i_hand])
+        val, _, can_split = self.get_value()
         
         n_hands = len(self.cards)
         n = len(self.cards[i_hand])
         
         can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
         can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
-        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
         can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_surrender)
         can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
@@ -162,7 +155,7 @@ class Player:
         if self.surrendered :
             return [['surrender'], [-self.base_wager/2]]
         for i,cards in enumerate(self.cards) :
-            val,_ = self._get_value_cards(cards)
+            val, _ = self._get_value_cards(cards)
             # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
             is_blackjack = (val==21) & (len(cards)==2) & (len(self.cards) == 1)
             
