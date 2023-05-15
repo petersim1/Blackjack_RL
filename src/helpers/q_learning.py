@@ -28,20 +28,19 @@ def gen_episode(
 
     while not player.is_done() :
 
-        player_total, useable_ace, can_split = player.get_value()
+        player_total, useable_ace = player.get_value()
         nHand = player._get_cur_hand() # need this for isolating "split" moves.
 
         policy = player.get_valid_moves()
         conditional_action_spaces[nHand].append((policy))
 
-        q_dict = q[(player_total, house_show, useable_ace, can_split)]
+        q_dict = q[(player_total, house_show, useable_ace)]
         move = select_action(state=q_dict, policy=policy, epsilon=epsilon, method=method)
 
         s_a_pair = StateActionPair(
             player_show=player_total,
             house_show=house_show,
             useable_ace=useable_ace,
-            can_split=can_split,
             move=move
         )
         s_a_pairs[nHand].append(s_a_pair)
@@ -106,7 +105,7 @@ def learn_policy(
             if s_a_pairs[i][hand]:
                 s_a_pair = s_a_pairs[i][hand][j]
 
-                old_q = q[(s_a_pair.player_show, s_a_pair.house_show, s_a_pair.useable_ace, s_a_pair.can_split)]
+                old_q = q[(s_a_pair.player_show, s_a_pair.house_show, s_a_pair.useable_ace)]
 
                 r = player_winnings[hand]
                 max_q_p = 0
@@ -114,8 +113,8 @@ def learn_policy(
                     s_a_pair_p = s_a_pairs[i][hand][j+1]
                     action_space = conditional_action_space[i][hand][j+1]
 
-                    q_dict = q[(s_a_pair_p.player_show, s_a_pair_p.house_show, s_a_pair_p.useable_ace, s_a_pair_p.can_split)]
-                    
+                    q_dict = q[(s_a_pair_p.player_show, s_a_pair_p.house_show, s_a_pair_p.useable_ace)]
+
                     max_q_p = max([v for k,v in q_dict.items() if k in action_space])
                     r = 0
                 old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr*(r + gamma * max_q_p - old_q[s_a_pair.move])

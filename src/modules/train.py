@@ -55,7 +55,7 @@ class Trainer(EarlyStop):
                 gamma=self.gamma,
                 method=self.method
             )
-        
+
         if reset_deck:
             blackjack.reset_game()
 
@@ -85,7 +85,7 @@ class Trainer(EarlyStop):
                 self.best_q = deepcopy(self.q)
 
         return mean_reward, percent_correct_baseline
-    
+
     def get_q(self, backtrack: bool=False):
         if self.early_stop and backtrack:
             return self.best_q

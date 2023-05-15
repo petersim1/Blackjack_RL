@@ -61,10 +61,10 @@ def play_round(
             print("Player Cards + Moves:")
         move = ""
         while not player.is_done() :
-            player_show, useable_ace, can_split = player.get_value()
+            player_show, useable_ace = player.get_value()
             policy = player.get_valid_moves()
 
-            state = q[(player_show, house_show, useable_ace, can_split)]
+            state = q[(player_show, house_show, useable_ace)]
 
             move = select_action(
                 state=state,

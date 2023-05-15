@@ -59,6 +59,7 @@ class Player:
     
 
     def _get_value_cards(self, cards: List[Union[int, str]]) -> Tuple[int, bool] :
+        """ gets the card total, and whether there's a useable ace, for a given set of cards """
         useable_ace = False
         total = sum([card_values[card] for card in cards])
         if cards.count('A') :
@@ -69,13 +70,11 @@ class Player:
     
 
     def get_value(self) -> Tuple[int, bool, bool]:
+        """ gets the card total and whether there's a useable ace for the current hand of cards for a player """
         i_hand = self._get_cur_hand()
-        n = len(self.cards[i_hand])
-        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
-
         total, useable_ace = self._get_value_cards(self.cards[i_hand])
 
-        return total, useable_ace, can_split
+        return total, useable_ace
         
          
     def get_valid_moves(self) -> List[str] :
@@ -84,7 +83,7 @@ class Player:
         if i_hand is None :
             return possible_moves
         
-        val, _, can_split = self.get_value()
+        val, _ = self.get_value()
         
         n_hands = len(self.cards)
         n = len(self.cards[i_hand])
@@ -92,6 +91,7 @@ class Player:
         can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
         can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
         can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_surrender)
+        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
         can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
         if val < 21 :
@@ -203,7 +203,7 @@ class Player:
                     else :
                         text.append('push')
                         winnings.append(0)
-        
+    
         return text, winnings
         
             
