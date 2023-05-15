@@ -1,29 +1,31 @@
 from typing import Optional
-from src.constants import card_map
-
+from copy import deepcopy
 
 def init_q(mode: Optional[str]=None) -> object:
     """Initialize the Q value object. Isolates splittable vs. non-splittable"""
 
     moves = ["stay", "hit", "split", "double", "surrender"]
-    moves_no_split = [m for m in moves if m!="split"]
-
-    Q = {"can_split": {}, "no_split": {}}
-    
-    for p in range(5,22) :
-        for h in range(2,12) :
-            if (21 > p > 11) :
-                for a in [True,False] :
-                    Q["no_split"][(p,h,a)] = {m:0 for m in moves_no_split}
+    Q = {}
+    for p in range(4,22) :
+        if p > 4:
+            if not p % 2:
+                split_arr = [False, True]
             else :
-                Q["no_split"][(p,h,False)] = {m:0 for m in moves_no_split}
-    
-    for c in card_map.values() :
-        if c in ["J","Q","K"] :
-            continue
+                split_arr = [False]
+        else :
+            split_arr = [True]
+
+        if 11 < p < 21:
+            ace_arr = [False, True]
+        else :
+            ace_arr = [False]
+            
         for h in range(2,12) :
-            a = False if c!="A" else True
-            Q["can_split"][(c,h,a)] = {m:0 for m in moves}
+            for ace in ace_arr:
+                for split in split_arr:
+                    if (p == 12) and (ace and not split): continue
+                    if (p > 12) and (ace and split): continue
+                    Q[(p, h, ace, split)] = {m:0 for m in moves}
 
     if mode == "accepted":
         return init_accepted_q(Q)
@@ -35,133 +37,163 @@ def init_q(mode: Optional[str]=None) -> object:
 
 
 def init_accepted_q(q):
-    for split,s_pairs in q.items() :
-        for s,vals in s_pairs.items() :
-            p,h,a = s
-            if split=="can_split" :
-                if p == "A" :
-                    p = 11
-                if p <= 3 :
-                    vals["hit"] = 0.5
-                    if h <= 7 :
-                        vals["split"] = 1
-                if p == 4 :
-                    vals["hit"] = 0.5
-                    if h in [5,6] :
-                        vals["split"] = 1
-                if p == 5 :
-                    vals["hit"] = 0.5
-                    if h <= 9 :
-                        vals["double"] = 1
-                if p == 6 :
-                    if h in [4,5,6] :
-                        vals["stay"] = 0.5
-                    else :
-                        vals["hit"] = 0.5
-                    if h <= 6 :
-                        vals["split"] = 1
-                if p == 7 :
-                    if h <= 6 :
-                        vals["stay"] = 0.5
-                    else :
-                        vals["hit"] = 0.5
-                    if h <= 7 :
-                        vals["split"] = 1
-                if p == 8 :
-                    if h <= 6 :
-                        vals["stay"] = 0.5
-                    else :
-                        vals["hit"] = 0.5
+    accepted_q = deepcopy(q)
+    for (player, house, useable_ace, can_split), vals in accepted_q.items():
+        if player <= 7:
+            if house <= 7:
+                if can_split:
                     vals["split"] = 1
-                if p == 9 :
-                    vals["stay"] = 0.5
-                    if h in [2,3,4,5,6,8,9] :
-                        vals["split"] = 1
-                if p == 10 :
-                    vals["stay"] = 0.5
-                if p == 11 :
-                    vals["split"] = 1
-            else :
-                if not a :
-                    if p <= 8 :
-                        vals["hit"] = 0.5
-                    if p == 9 :
-                        vals["hit"] = 0.5
-                        if h in [3,4,5,6] :
-                            vals["double"] = 1
-                    if p == 10 :
-                        vals["hit"] = 0.5
-                        if h <= 9 :
-                            vals["double"] = 1
-                    if p == 11 :
-                        vals["hit"] = 0.5
-                        vals["double"] = 1
-                    if p == 12 :
-                        if 4 <= h <= 6 :
-                            vals["stay"] = 0.5
-                        else :
-                            vals["hit"] = 0.5
-                    if p in [13,14] :
-                        if h <= 6 :
-                            vals["stay"] = 0.5
-                        else :
-                            vals["hit"] = 0.5
-                    if p == 15 :
-                        if h <= 6 :
-                            vals["stay"] = 0.5
-                        else :
-                            vals["hit"] = 0.5
-                        if h == 10 :
-                            vals["surrender"] = 1
-                    if p == 16 :
-                        if h <= 6 :
-                            vals["stay"] = 0.5
-                        else :
-                            vals["hit"] = 0.5
-                        if h >= 9 :
-                            vals["surrender"] = 1
-                    if p >= 17 :
-                        vals["stay"] = 0.5
                 else :
-                    if p in [13,14] :
+                    vals["hit"] = 1
+            else:
+                vals["hit"] = 1
+        if player == 8:
+            if house in [5,6]:
+                if can_split:
+                    vals["split"] = 1
+                else:
+                    vals["hit"] = 1
+            else:
+                vals["hit"] = 1
+        if player == 9:
+            if house in [3,4,5,6]:
+                vals["double"] = 1
+                vals["hit"] = 0.5
+            else :
+                vals["hit"] = 1
+        if player == 10:
+            if house <= 9:
+                vals["double"] = 1
+                vals["hit"] = 0.5
+            else:
+                vals["hit"] = 1
+        if player == 11:
+            vals["double"] = 1
+            vals["hit"] = 0.5
+        if player == 12:
+            if can_split:
+                if useable_ace: #denotes pair of aces
+                    vals["split"] = 1
+                else:
+                    if house <= 6:
+                        vals["split"] = 1
+                    else :
+                        vals["hit"] = 1
+            else:
+                if house in [4,5,6]:
+                    vals["stay"] = 1
+                else :
+                    vals["hit"] = 1
+        if player == 13:
+            if useable_ace:
+                if house in [5,6]:
+                    vals["double"] = 1
+                    vals["hit"] = 0.5
+                else:
+                    vals["hit"] = 1
+            else:
+                if house <= 6:
+                    vals["stay"] = 1
+                else :
+                    vals["hit"] = 1
+        if player == 14:
+            if useable_ace:
+                if house in [5,6]:
+                    vals["double"] = 1
+                    vals["hit"] = 0.5
+                else:
+                    vals["hit"] = 1
+            elif can_split:
+                if house <= 7:
+                    vals["split"] = 1
+                else:
+                    vals["hit"] = 1
+            else:
+                if house <= 6:
+                    vals["stay"] = 1
+                else :
+                    vals["hit"] = 1
+        if player == 15:
+            if useable_ace:
+                if house in [4,5,6]:
+                    vals["double"] = 1
+                    vals["hit"] = 0.5
+                else:
+                    vals["hit"] = 1
+            else:
+                if house <= 6:
+                    vals["stay"] = 1
+                else :
+                    if house == 10:
+                        vals["surrender"] = 1
                         vals["hit"] = 0.5
-                        if h in [5,6] :
-                            vals["double"] = 1
-                    if p in [15,16] :
+                    else:
+                        vals["hit"] = 1
+        if player == 16:
+            if useable_ace:
+                if house in [4,5,6]:
+                    vals["double"] = 1
+                    vals["hit"] = 0.5
+                else:
+                    vals["hit"] = 1
+            elif can_split:
+                vals["split"] = 1
+            else:
+                if house <= 6:
+                    vals["stay"] = 1
+                else :
+                    if house in [9,10,11]:
+                        vals["surrender"] = 1
                         vals["hit"] = 0.5
-                        if h in [4,5,6] :
-                            vals["double"] = 1
-                    if p == 17 :
-                        vals["hit"] = 0.5
-                        if h in [3,4,5,6] :
-                            vals["double"] = 1
-                    if p == 18 :
-                        if h <= 8 :
-                            vals["stay"] = 0.5
-                        else :
-                            vals["hit"] = 0.5
-                        if h <= 6 :
-                            vals["double"] = 1
-                    if p == 19 :
-                        vals["stay"] = 0.5
-                        if h == 6 :
-                            vals["double"] = 1
-                    if p == 20 :
-                        vals["stay"] = 0.5 
-    return q
+                    else:
+                        vals["hit"] = 1
+        if player == 17:
+            if useable_ace:
+                if house in [3,4,5,6]:
+                    vals["double"] = 1
+                    vals["hit"] = 0.5
+                else:
+                    vals["hit"] = 1
+            else:
+                vals["stay"] = 1
+        if player == 18:
+            if useable_ace:
+                if house <= 6:
+                    vals["double"] = 1
+                    vals["stay"] = 0.5
+                elif 6 < house < 9:
+                    vals["stay"] = 1
+                else:
+                    vals["hit"] = 1
+            elif can_split:
+                if house in [7,10,11]:
+                    vals["stay"] = 1
+                else:
+                    vals["split"] = 1
+            else:
+                vals["stay"] = 1
+        if player == 19:
+            if useable_ace:
+                if house == 6:
+                    vals["double"] = 1
+                    vals["stay"] = 0.5
+                else:
+                    vals["stay"] = 1
+            else:
+                vals["stay"] = 1
+        if player == 20:
+            vals["stay"] = 1
+        if player == 21:
+            vals["stay"] = 1
+
+    return accepted_q
 
 
 def init_house_q(q):
-    for split,s_pairs in q.items() :
-        for s,vals in s_pairs.items() :
-            p,h,a = s
-            if split=="can_split" :
-                if p == "A" :
-                    p = 12
-                else :
-                    p = p*2
-            if p >= 17 :
-                vals["stay"] = 1
-            else :
-                vals["hit"] = 1
-    return q
+    house_q = deepcopy(q)
+    for (player, house, useable_ace, can_split), vals in house_q.items():
+        if player >= 17:
+            vals["stay"] = 1
+        else :
+            vals["hit"] = 1
+    return house_q
