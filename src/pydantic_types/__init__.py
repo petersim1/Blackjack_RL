@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union
 from pydantic import BaseModel
 
 class StateActionPair(BaseModel):
@@ -15,9 +15,8 @@ class RulesI(BaseModel):
     double_after_split=True
     hit_after_split_aces=False
     reduced_blackjack_payout=False
-    allow_late_surrender=False
+    allow_surrender=True
 
 QMovesI = Dict[str, float]
 
-StateActionPairs = List[List[Tuple[int, int, bool, bool, Optional[str], str]]]
 ConditionalActionSpace = List[List[List[str]]]

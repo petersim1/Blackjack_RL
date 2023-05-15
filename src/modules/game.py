@@ -20,7 +20,13 @@ class Game :
         MUST call init_round() to start the round
     """
     
-    def __init__(self, shrink_deck: bool=True, n_decks: int=6, ratio_penetrate: float=4/6, rules: object={}) -> None:
+    def __init__(
+            self,
+            shrink_deck: bool=True,
+            n_decks: int=6,
+            ratio_penetrate: float=4/6,
+            rules: object={}
+        ) -> None:
         
         self.shrink_deck = shrink_deck # if False, will randomly select cards uniformly, and deck won't run out.
         self.n_decks = n_decks
@@ -45,13 +51,10 @@ class Game :
         self.house: type[Player] = Player(0)
         
 
-    def _update_count(self, card: Union[int, str]) -> None :
-        if card_values[card] == 1 :
-            self.count -= 1
-        
+    def _update_count(self, card: Union[int, str]) -> None :        
         if 2 <= card_values[card] <=6 :
             self.count += 1
-        if card_values[card] >= 10 :
+        if (card_values[card] >= 10) or (card_values[card] == 1) :
             self.count -= 1
 
             
@@ -72,11 +75,7 @@ class Game :
         
 
     def init_round(self, wagers: List[float]) -> None :
-        
-        '''
-        - Calls to reset the player / house cards
-        - Increments the # of rounds played
-        '''
+        """Initializes the round. Resets the player, and will reshuffle as needed."""
         self.wagers = wagers
         
         self._init_players()
@@ -96,7 +95,8 @@ class Game :
         self._init_deck()
         self.players = []
         self.house = None
-        self.nRoundsPlayed = 0      
+        self.n_rounds_played = 0
+        self.round_init = False
         
 
     def deal_init(self) -> None:
@@ -112,7 +112,7 @@ class Game :
         
         house,_ = self.house._get_value_cards(self.house.cards[0])
         if house == 21 :
-            self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance)
+            self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance + surrender)
         
 
     def get_house_show(self, show_value: bool=False) -> Union[int, str] :
@@ -139,15 +139,14 @@ class Game :
     def step_player(self, player: type[Player], move: str) -> None :
         n = player.get_num_cards_draw(move)
         cards = [self._select_card() for _ in range(n)]
-        player.step(move,cards)
+        player.step(move, cards)
         
     
     def get_results(self) -> Tuple[List[List[str]], List[float]]:
-        house,_ = self.house._get_value_cards(self.house.cards[0])
         players = []
         winnings = []
         for player in self.players :
-            text,win = player.get_result(house,self.house.cards)
+            text, win = player.get_result(self.house.cards[0])
             players.append(text)
             winnings.append(win)
                 

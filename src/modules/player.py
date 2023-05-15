@@ -10,6 +10,8 @@ class Player:
     It is intended to be wrapped into the Game module, which controls the blackjack game.
 
     In the Game module, in each round, this module is reset.
+
+    We don't care for insurance bets, as they are side bets, so we'll ignore completely.
     """
     
     def __init__(self, wager: float, rules: object={}) -> None :
@@ -21,7 +23,6 @@ class Player:
         self.rules = RulesI(**rules)
 
         self.complete = [False]
-        self.insured = False
         self.surrendered = False
         self.aces_split = False
 
@@ -37,9 +38,14 @@ class Player:
     def _deal_card(self, card: Union[int, str]) -> None:
         i_hand = self._get_cur_hand()
         self.cards[i_hand].append(card)
-        if self._get_value_cards(self.cards[i_hand])[0] >= 21 :
+        total, _ = self._get_value_cards(self.cards[i_hand])
+        if (total == 21) and (len(self.cards[i_hand]) == 2) and (len(self.cards) == 1):
+            # Natural blackjack, want to mark as ended immediately.
+            # Can't get natural blackjack after splits, so let user select a policy (only stay).
             self.complete[i_hand] = True
-    
+        if total > 21:
+            self.complete[i_hand] = True
+
 
     def _split(self, cards: List[Union[int, str]]) -> None:
         i_hand = self._get_cur_hand()
@@ -78,13 +84,13 @@ class Player:
         return total, can_split, useable_ace, c1
         
          
-    def get_valid_moves(self, house_show: Union[int,str]) -> List[str] :
+    def get_valid_moves(self) -> List[str] :
         possible_moves = []
         i_hand = self._get_cur_hand()
         if i_hand is None :
             return possible_moves
         
-        val, _, _, _ = self.get_value()
+        val, _ = self._get_value_cards(self.cards[i_hand])
         
         n_hands = len(self.cards)
         n = len(self.cards[i_hand])
@@ -92,15 +98,13 @@ class Player:
         can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
         can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
         can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
-        can_insure = (house_show=='A') & (n==2) & (n_hands==1) & (not self.insured)
-        can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_late_surrender)
+        can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_surrender)
         can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
         if val < 21 :
             if can_stay: possible_moves.append("stay")
             if can_hit : possible_moves.append("hit")
             if can_split : possible_moves.append('split')
-            if can_insure : possible_moves.append('insurance')
             if can_surrender : possible_moves.append('surrender')
             if can_double : possible_moves.append('double')
         if val == 21 :
@@ -114,7 +118,6 @@ class Player:
             return 1
         if move == 'split' :
             return 2
-        
         return 0
     
     
@@ -131,8 +134,6 @@ class Player:
             self.wager[i_hand] *= 2
             self._deal_card(cards_give[0])
             self.complete[i_hand] = True
-        if move == 'insurance':
-            self.insured = True
         if move == 'split':
             self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
             self._split(cards_give)
@@ -146,19 +147,20 @@ class Player:
             self.complete[i_hand] = True
 
             
-    def get_result(self, house_value: int, house_cards: List[Union[int, str]]) -> Tuple[List[str], float] :
+    def get_result(
+            self,
+            house_cards: List[Union[int, str]]
+        ) -> Tuple[List[str], float] :
+
+        blackjack_payout = 1.2 if self.rules.reduced_blackjack_payout else 1.5
+
+        house_value, _ = self._get_value_cards(house_cards)
         house_is_blackjack = (house_value==21) & (len(house_cards)==2)
-        blackjack_payout = 1.5 if not self.rules.reduced_blackjack_payout else 1.2
         
         text = []
-        winnings = 0
-        if self.insured :
-            if house_is_blackjack : # insurance pays out 2:1
-                winnings += self.base_wager 
-            else :
-                winnings -= self.base_wager/2
+        winnings = []
         if self.surrendered :
-            return [['surrender'], winnings-self.base_wager/2]
+            return [['surrender'], [-self.base_wager/2]]
         for i,cards in enumerate(self.cards) :
             val,_ = self._get_value_cards(cards)
             # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
@@ -166,50 +168,54 @@ class Player:
             
             if val > 21 :
                 text.append('bust')
-                winnings -= self.wager[i]
+                winnings.append(-self.wager[i])
             if val == 21 :
                 if is_blackjack :
                     if house_is_blackjack :
                         text.append('push')
+                        winnings.append(0)
                     else :
                         text.append('blackjack')
-                        winnings += self.wager[i]*blackjack_payout
+                        winnings.append(self.wager[i]*blackjack_payout)
                 else :
                     if house_is_blackjack :
                         text.append('loss')
-                        winnings -= self.wager[i]
+                        winnings.append(-self.wager[i])
                     else :
                         if house_value == 21 :
                             text.append('push')
+                            winnings.append(0)
                         else :
                             if (self.rules.push_dealer22 and (house_value == 22)) : 
                                 text.append("push")
+                                winnings.append(0)
                             else :
                                 text.append('win')
-                                winnings += self.wager[i]
-
+                                winnings.append(self.wager[i])
             if val < 21 :
                 if house_value > 21 :
                     if (self.rules.push_dealer22 and (house_value == 22)) : 
                         text.append("push")
+                        winnings.append(0)
                     else :
                         text.append('win')
-                        winnings += self.wager[i]
+                        winnings.append(self.wager[i])
                 else :
                     if val > house_value :
                         text.append('win')
-                        winnings += self.wager[i]
+                        winnings.append(self.wager[i])
                     elif val < house_value :
                         text.append('loss')
-                        winnings -= self.wager[i]
+                        winnings.append(-self.wager[i])
                     else :
                         text.append('push')
+                        winnings.append(0)
         
         return text, winnings
         
             
-    def is_move_valid(self, move: str, house_show: int) -> bool :
-        return move in self.get_valid_moves(house_show)
+    def is_move_valid(self, move: str) -> bool :
+        return move in self.get_valid_moves()
         
 
     def get_cards(self) -> List[List[Union[int, str]]] :
