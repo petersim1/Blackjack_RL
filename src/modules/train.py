@@ -27,12 +27,22 @@ class EarlyStop:
             self.stop = True
 
 class Trainer(EarlyStop):
-    def __init__(self, early_stop: bool, method: str, lr: float, gamma: float, eps_decay: float=-1, eps_min: float=-1, leniency: int=10):
+    def __init__(
+            self,
+            early_stop: bool,
+            method: str,
+            lr: float,
+            gamma: float,
+            eps_decay: float=-1,
+            eps_min: float=-1,
+            leniency: int=10,
+            moves_blacklist: List[str]=["surrender"]
+        ):
         EarlyStop.__init__(self, leniency)
         self.early_stop = early_stop
         self.method = method
-        self.q = init_q()
-        self.best_q = init_q()
+        self.q = init_q(moves_blacklist=moves_blacklist)
+        self.best_q = init_q(moves_blacklist=moves_blacklist)
         self.accepted_q = init_q(mode="accepted")
         self.eval = []
         self.correctness = []

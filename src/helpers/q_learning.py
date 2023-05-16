@@ -102,7 +102,7 @@ def learn_policy(
         j = 0 # move number in state-action pair
         hand = 0 # hand number (to account for splits)
         while (hand < len(s_a_pairs[i])):
-            if s_a_pairs[i][hand]:
+            if s_a_pairs[i][hand]: #otherwise, player blackjack, and we can't learn from this since no moves are taken.
                 s_a_pair = s_a_pairs[i][hand][j]
 
                 old_q = q[(s_a_pair.player_show, s_a_pair.house_show, s_a_pair.useable_ace)]

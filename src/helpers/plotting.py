@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -25,21 +25,34 @@ def plot_loss(array: List[float], every: int, label: str, include_max: bool=Fals
 
 def plot_correctness(array, every) -> None:
     plt.figure(figsize=(15,4))
-    plt.title("Average Max Q of Randomly Sampled States")
-    plt.ylabel("Percent correct moves compared to baseline")
+    plt.title("Percent correct moves compared to baseline")
     plt.plot(np.arange(0,len(array))*every, array)
     plt.show()
 
 
-def plot_hist_to_line(data, label, alpha, **kwargs):
-    a,b = np.histogram(data, **kwargs)
-    plt.plot([b[i-1:i+1].mean() for i in range(1,b.shape[0])],a, label=label, alpha=alpha)
+def plot_bar(datas, labels, alphas):
+
+    unique_vals = np.unique(datas)
+
+    for i,data in enumerate(datas):
+        out = []
+        values, freq = np.unique(data, return_counts=True)
+        freq = freq / freq.sum()
+        freq_dict = dict(zip(values,freq))
+
+        for val in unique_vals:
+            if val in freq_dict:
+                out.append(freq_dict[val])
+            else:
+                out.append(0)
+
+        plt.plot(unique_vals, out, label=labels[i], alpha=alphas[i])
 
 
 def plot_mesh(axis, data, ranges, ticks=None):
     x,y = np.meshgrid(ranges[0], ranges[1])
     axis.plot_surface(x, y, data, rstride=1, cstride=1,cmap="viridis", edgecolor="none")
-    axis.view_init(azim=-20)
+    axis.view_init(azim=-25)
     axis.set_xlabel("House Shows")
     axis.set_ylabel("Player Shows")
     axis.set_zlabel("Value")
@@ -47,54 +60,54 @@ def plot_mesh(axis, data, ranges, ticks=None):
         axis.set(yticks=ranges[0], yticklabels=ticks)
 
 
-def df_best_move(array,moves,pairsSplit,colorBox=True) :
+def generate_mesh(q: object) -> np.ndarray:
+    value_det = np.zeros((3, 21+1, 11+1))
 
-    bestMove = np.empty((3,21+1,11+1),dtype='O')
-    pairsTicks = [k for k in pairsSplit.keys() if k[0] not in ['J','Q','K']]
+    for (player, house, useable_ace), vals in q.items():
+        dict_no_split = {k:v for k,v in vals.items() if k != "split"}
+        value_det[int(useable_ace), player, house] = max(dict_no_split.values())
 
-    # In this first bucket, you don't have the chance to split.
-    indsSearch = [i for i,v in enumerate(moves) if v!='split']
-    movesSearch = [v for v in moves if v!='split']
-    for ace in [0,1] :
-        for i in range(array.shape[-2]-len(pairsTicks)) :
-            for j in range(array.shape[-1]) :
-                best = movesSearch[np.argmax(array[indsSearch,ace,i,j])]
-                bestMove[ace][i][j] = best[:2].title()
+        if not player % 2:
+            player_ind = int(player / 2)
+            if useable_ace:
+                player_ind = 11
+            value_det[2, player_ind, house] = max(vals.values())
 
-    for i in range(array.shape[-2]-len(pairsTicks),array.shape[-2]) :
-        for j in range(array.shape[-1]) :
-            if array[:,0,i,j].sum() == 0 :
-                best = moves[np.argmax(array[:,1,i,j])]
-            else :
-                best = moves[np.argmax(array[:,0,i,j])]
-            bestMove[-1][i-22][j] = best[:2].title()
+    return value_det
 
-    colorMap = {'St':'blue','Hi':'green','Do':'red','Su':'grey','Sp':'yellow'}
 
-    def color(val) :
-        return 'background-color: %s' % colorMap[val]
+def generate_grid(q: object) -> Tuple[np.ndarray, np.ndarray]:
 
-    colsShow = [col for col in range(2,12) if col>1]
-    noAce = pd.DataFrame(bestMove[0])
-    noAce.columns = list(range(12))
-    noAce = noAce.iloc[5:][colsShow]
+    fill = np.empty((3, 21+1, 11+1), dtype="O")
 
-    colsShow = [col for col in range(2,12) if col>1]
-    yesAce = pd.DataFrame(bestMove[1])
-    yesAce.columns = list(range(12))
-    yesAce = yesAce.iloc[13:][colsShow]
+    for (player, house, useable_ace), vals in q.items():
 
-    colsShow = [col for col in range(2,12) if col>1]
-    canSplit = pd.DataFrame(bestMove[2])
-    canSplit.columns = list(range(12))
-    canSplit = canSplit.iloc[:10][colsShow]
-    canSplit.index = pairsTicks
-    
-    if colorBox :
-        noAce = noAce.style.applymap(color)
-        yesAce = yesAce.style.applymap(color)
-        canSplit = canSplit.style.applymap(color)
+        dict_no_split = {k:v for k,v in vals.items() if k != "split"}
 
-    return noAce,yesAce,canSplit
+        max_val = max(dict_no_split,key=dict_no_split.get)
+        if max_val == "double":
+            dict_no_double = {k:v for k,v in dict_no_split.items() if k != "double"}
+            max_val = max_val[:2].title() + "/" + max(dict_no_double,key=dict_no_double.get)[:2].title()
+        else:
+            max_val = max_val[:2].title()
 
-__all__ = ["dfBestMove"]
+        fill[int(useable_ace), player, house] = max_val
+
+        if not player % 2:
+            player_ind = int(player / 2)
+            if useable_ace:
+                if player == 12:
+                    player_ind = 11
+                else:
+                    continue
+
+            max_val = max(vals,key=vals.get)
+            if max_val == "double":
+                dict_no_double = {k:v for k,v in vals.items() if k != "double"}
+                max_val = max_val[:2].title() + "/" + max(dict_no_double,key=dict_no_double.get)[:2].title()
+            else:
+                max_val = max_val[:2].title()
+            
+            fill[2, player_ind, house] = max_val
+
+    return fill

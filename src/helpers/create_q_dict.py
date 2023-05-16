@@ -1,7 +1,7 @@
-from typing import Optional
+from typing import Optional, List
 from copy import deepcopy
 
-def init_q(mode: Optional[str]=None) -> object:
+def init_q(moves_blacklist: List[str]=[], mode: Optional[str]=None) -> object:
     """
     Initialize the Q value object.
     Initially, I was isolating splittable vs. non-splittable,
@@ -10,6 +10,7 @@ def init_q(mode: Optional[str]=None) -> object:
     """
 
     moves = ["stay", "hit", "split", "double", "surrender"]
+    moves = [m for m in moves if m not in moves_blacklist]
     Q = {}
     for p in range(4,22) :
         if 11 < p < 21:
