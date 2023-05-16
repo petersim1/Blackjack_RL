@@ -1,5 +1,4 @@
 from typing import List, Optional
-import numpy as np
 from copy import deepcopy
 
 from src.helpers.create_q_dict import init_q

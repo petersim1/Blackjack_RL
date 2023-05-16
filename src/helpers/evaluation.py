@@ -1,7 +1,7 @@
 import numpy as np
-from typing import List, Tuple, Union
+from typing import List
 
-from src.helpers.runner import select_action, play_n_rounds
+from src.helpers.runner import select_action
 from src.modules.game import Game
 from src.modules.player import Player
 

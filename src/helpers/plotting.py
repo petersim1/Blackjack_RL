@@ -1,6 +1,5 @@
 from typing import List, Tuple
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 def plot_loss(array: List[float], every: int, label: str, include_max: bool=False) -> None:

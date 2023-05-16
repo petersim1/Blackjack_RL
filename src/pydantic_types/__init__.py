@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Union
+from typing import List, Dict
 from pydantic import BaseModel
 
 class StateActionPair(BaseModel):
