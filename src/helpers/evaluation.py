@@ -1,7 +1,8 @@
+import asyncio
 import numpy as np
 from typing import List
 
-from src.helpers.runner import select_action
+from src.helpers.runner import select_action, play_round
 from src.modules.game import Game
 from src.modules.player import Player
 
@@ -47,8 +48,10 @@ def compare_to_accepted(
                 player_show, useable_ace = player.get_value()
                 policy = player.get_valid_moves()
 
-                state = q[(player_show, house_show, useable_ace)]
-                accepted_state = accepted_q[(player_show, house_show, useable_ace)]
+                can_split = "split" in policy
+
+                state = q[(player_show, house_show, useable_ace, can_split)]
+                accepted_state = accepted_q[(player_show, house_show, useable_ace, can_split)]
 
                 move = select_action(
                     state=state,
@@ -67,3 +70,131 @@ def compare_to_accepted(
                 blackjack.step_player(player,move)
     
     return sum(correct_moves) / len(correct_moves)
+
+
+async def play_until_bankroll(q: object, wager: float, bankroll: float, max_rounds: int, game_hyperparams: object):
+
+    assert max_rounds <= 1_000, "use a valid max_rounds <= 1,000"
+
+    blackjack = Game(**game_hyperparams)
+
+    n_rounds = 0
+    n_rounds_profitable = 0
+    bankroll_init = bankroll
+    profits = 0
+
+    while (bankroll_init > wager) and (n_rounds < max_rounds):
+
+        _, rewards = play_round(
+            blackjack=blackjack,
+            q=q,
+            wagers=[wager],
+            verbose=False
+        )
+        bankroll_init += sum(rewards[0])
+        profits += sum(rewards[0])
+        n_rounds += 1
+        n_rounds_profitable += int(bankroll_init > bankroll)
+
+    return n_rounds, n_rounds_profitable, profits
+
+
+async def play_games_bankroll(
+        q: object,
+        wager: float,
+        bankroll: float,
+        max_rounds: int,
+        n_games: int,
+        game_hyperparams: object
+    ):
+
+    tasks = []
+    for _ in range(n_games):
+        tasks.append(asyncio.create_task(play_until_bankroll(q, wager, bankroll, max_rounds, game_hyperparams)))
+
+    res = await asyncio.gather(*tasks)
+
+    rounds = [r[0] for r in res]
+    profitable = [r[1] for r in res]
+    profits = [r[2] for r in res]
+
+    return rounds, profitable, profits
+
+
+async def play_games_bankrolls(
+        q: object,
+        wager: float,
+        max_rounds: int,
+        n_games: int,
+        bankrolls: List[float],
+        game_hyperparams: object
+    ):
+
+    tasks = []
+    for bankroll in bankrolls:
+        tasks.append(asyncio.create_task(play_games_bankroll(q, wager, bankroll, max_rounds, n_games, game_hyperparams)))
+
+    res = await asyncio.gather(*tasks)
+
+    rounds = [r[0] for r in res]
+    profitable = [r[1] for r in res]
+    profits = [r[2] for r in res]
+
+
+    return rounds, profitable, profits
+
+
+def assess_static_outcomes(blackjack: type[Game], q: object, n_rounds: int):
+
+    results = {}
+    busts = {}
+    player_results = {"soft":{},"hard":{}}
+
+    for _ in range(n_rounds) :
+
+        blackjack.init_round(wagers=[1])
+        blackjack.deal_init()
+        player = blackjack.players[0] # only 1 player, so i"ll just extract that specific player module.
+        house_show = blackjack.get_house_show(show_value=True)
+        
+        r_p = player._get_value_cards(player.cards[0])
+        soft = r_p[1]
+        if r_p[0] not in player_results["soft"] :
+            player_results["soft"][r_p[0]] = {"n": 0, "rewards": 0}
+            player_results["hard"][r_p[0]] = {"n": 0, "rewards": 0}
+
+        if house_show not in results :
+            results[house_show] = {"n": 0, "bust": 0, "17": 0, "18": 0, "19": 0, "20": 0,"21": 0}
+        results[house_show]["n"] += 1
+
+        while not player.is_done() :
+
+            player_show, useable_ace = player.get_value()
+
+            policy = player.get_valid_moves()
+            policy = [p for p in policy if p!="insurance"]
+
+            can_split = "split" in policy
+
+            move = select_action(q[(player_show, house_show, useable_ace, can_split)], policy, -1, "epsilon")
+
+            blackjack.step_player(player,move)
+
+
+        blackjack.step_house()
+        
+        total, _ = blackjack.house._get_value_cards(blackjack.house.cards[0])
+
+        if total > 21 :
+            results[house_show]["bust"] += 1
+            if total not in busts :
+                busts[total] = 0
+            busts[total] += 1
+        if total <= 21 :
+            results[house_show][str(total)] += 1
+            
+        _, r_player = player.get_result(blackjack.house.cards[0])
+        player_results["soft" if soft else "hard"][r_p[0]]["n"] += 1
+        player_results["soft" if soft else "hard"][r_p[0]]["rewards"] += sum(r_player)
+
+    return results, busts, player_results

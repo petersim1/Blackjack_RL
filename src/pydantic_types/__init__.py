@@ -5,6 +5,7 @@ class StateActionPair(BaseModel):
     player_show: int
     house_show: int
     useable_ace: bool
+    can_split: bool
     move: str
 
 class RulesI(BaseModel):

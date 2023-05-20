@@ -28,7 +28,7 @@ def select_action(state: QMovesI, policy: List[str], epsilon: float, method: str
     if method == "epsilon" :
         n = np.random.rand()
         if n < epsilon :
-            move = np.random.choice(policy)
+            move = np.random.choice(list(q_dict.keys()))
         else :
             # possible that there are multiple "best" moves, sample from them.
             best_move = [k for k,v in q_dict.items() if v==max(list(q_dict.values()))]
@@ -64,7 +64,9 @@ def play_round(
             player_show, useable_ace = player.get_value()
             policy = player.get_valid_moves()
 
-            state = q[(player_show, house_show, useable_ace)]
+            can_split = "split" in policy
+
+            state = q[(player_show, house_show, useable_ace, can_split)]
 
             move = select_action(
                 state=state,
