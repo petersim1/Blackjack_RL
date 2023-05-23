@@ -8,6 +8,14 @@ class StateActionPair(BaseModel):
     can_split: bool
     move: str
 
+class StateActionPairDeep(BaseModel):
+    player_show: int
+    house_show: int
+    useable_ace: bool
+    can_split: bool
+    can_double: bool
+    move: str
+
 class RulesI(BaseModel):
     dealer_hit_soft17=True
     push_dealer22=False

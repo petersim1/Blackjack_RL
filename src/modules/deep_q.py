@@ -18,7 +18,7 @@ class Net(nn.Module):
         self.output_dim = len(self.moves)
         self.hidden_layers = hidden_layers
         self.fc_input = nn.Linear(self.input_dim, self.hidden_layers[0])
-        self.nonlinear = nn.Tanh()
+        self.nonlinear = nn.ReLU()
         
         self.fc_hidden = []
         for i in range(len(self.hidden_layers)-1) :
@@ -46,10 +46,14 @@ class Net(nn.Module):
 
     def act(self, obs, method="argmax", avail_actions=[]):
         """
-        obs: (batch_size x 5)
-        avail_actions: empty or (batch_size x n_i)
+        inputs:
+        - obs: (batch_size, 5)
+        - avail_actions: empty or (batch_size, n_i)
 
-        returns: (batch_size x 1)
+        returns: 
+        - q_avail_t: (batch_size, 5)
+        - q_selection_t: (batch_size, 1)
+        - actions_t: (batch_size, 1)
         """
 
         assert method in ["argmax", "softmax"], "must use a valid method"
@@ -63,12 +67,14 @@ class Net(nn.Module):
             q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
 
         if method == "argmax":
-            actions = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
+            actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
         else:
             action_p = self.softmax(q_avail_t).detach().numpy()
-            actions = torch.tensor(list(map(lambda x : np.random.choice(x.shape[0], p=x), action_p))).unsqueeze(-1)
+            actions_t = torch.tensor(list(map(lambda x : np.random.choice(x.shape[0], p=x), action_p))).unsqueeze(-1)
 
-        return q_avail_t, actions
+        q_selection_t = torch.gather(q_avail_t, dim=1, index=actions_t)
+
+        return q_avail_t, q_selection_t, actions_t
 
 
 class EarlyStop:
@@ -122,8 +128,9 @@ class Trainer(EarlyStop):
         # target_q_argmax is determined for all next states, even if it's a terminal state.
         # For terminal states, results don't make sense, but it doesn't matter since dones_t will force us to ignore it anyways
 
-        _, target_q_argmax = self.target_net.act(obs_next_t, method="argmax", avail_actions=a_s_next)
-        targets = rewards_t + gamma * (1 - dones_t) * target_q_argmax
+        _, target_q_argmax, _ = self.target_net.act(obs_next_t, method="argmax", avail_actions=a_s_next)
+        # _, target_q_argmax, _ = self.target_net.act(obs_next_t, method="argmax")
+        targets = rewards_t + torch.nan_to_num(gamma * (1 - dones_t) * target_q_argmax, nan=0)
 
         q_values = self.online_net.forward(obs_t)
 

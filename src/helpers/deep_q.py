@@ -1,18 +1,20 @@
 from collections import deque
 from typing import List
 import numpy as np
-from torch import tensor, float32
+import torch
 import asyncio
 
 from src.modules.game import Game
 from src.modules.player import Player
 from src.modules.deep_q import Net
-from src.pydantic_types import StateActionPair
+from src.pydantic_types import StateActionPairDeep
 
 def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net], mode="random"):
     """ step to update the replay buffer """
 
     assert mode in ["random", "argmax", "softmax"]
+
+    model.eval()
 
     blackjack.init_round([1])
     blackjack.deal_init()
@@ -36,34 +38,36 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
         action_space[nHand].append((policy))
 
         can_split = "split" in policy
-        first_move = len(player.cards[nHand]) == 2
+        can_double = "double" in policy
+
+        obs = (player_total, house_show, int(useable_ace), int(can_split), int(can_double))
 
         if mode == "random":
             # move = np.random.choice(policy) # completely random within valid action space
             move = np.random.choice(model.moves)
         elif mode == "argmax":
-            obs_t = tensor([player_total, house_show, useable_ace, can_split, first_move], dtype=float32).unsqueeze(0)
-            # _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
-            _, action_ind = model.act(obs=obs_t, method="argmax")
-            move = model.moves[action_ind[0].item()]
+            obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+            # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
+            _, _, action_ind = model.act(obs=obs_t, method="argmax")
+            move = model.moves[action_ind[0][0].item()]
         else:
-            obs_t = tensor([player_total, house_show, useable_ace, can_split, first_move], dtype=float32).unsqueeze(0)
-            # _, action_ind = model.act(obs=obs_t, method="softmax", avail_actions=[policy])
-            _, action_ind = model.act(obs=obs_t, method="softmax")
-            move = model.moves[action_ind[0].item()]
+            obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+            # _, _, action_ind = model.act(obs=obs_t, method="softmax", avail_actions=[policy])
+            _, _, action_ind = model.act(obs=obs_t, method="softmax")
+            move = model.moves[action_ind[0][0].item()]
         
         if move not in policy:
-            state_obs = (player_total, house_show, int(useable_ace), int(can_split), int(first_move))
             buffer.append(
-                (state_obs, policy, move, -1.5, 1, None, None)
+                (obs, policy, move, -3, 1, None, None)
             )
             return
 
-        s_a_pair = StateActionPair(
+        s_a_pair = StateActionPairDeep(
             player_show=player_total,
             house_show=house_show,
             useable_ace=useable_ace,
             can_split=can_split,
+            can_double=can_double,
             move=move
         )
         s_a[nHand].append(s_a_pair)
@@ -78,6 +82,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
 
     _, reward_hands = player.get_result(blackjack.house.cards[0])
 
+    s_a_pair: StateActionPairDeep
+    look_forward: StateActionPairDeep
     for i,s_a_pair_hand in enumerate(s_a):
         for j,s_a_pair in enumerate(s_a_pair_hand):
 
@@ -86,7 +92,7 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
                 s_a_pair.house_show,
                 int(s_a_pair.useable_ace),
                 int(s_a_pair.can_split),
-                int(j == 0)
+                int(s_a_pair.can_double)
             )
             move = s_a_pair.move
             reward = 0
@@ -99,13 +105,13 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
                 done = 1
                 a_s_new = None
             else:
-                rewind = s_a_pair_hand[j+1]
+                look_forward = s_a_pair_hand[j+1]
                 state_obs_new = (
-                    rewind.player_show,
-                    rewind.house_show,
-                    int(rewind.useable_ace),
-                    int(rewind.can_split),
-                    0
+                    look_forward.player_show,
+                    look_forward.house_show,
+                    int(look_forward.useable_ace),
+                    int(look_forward.can_split),
+                    int(look_forward.can_double)
                 )
                 a_s_new = action_space[i][j+1]
             
@@ -115,6 +121,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
 
 
 def play_round(blackjack: type[Game], model: type[Net], wagers: List[float]):
+
+    model.eval()
     
     blackjack.init_round(wagers)
     blackjack.deal_init()
@@ -126,20 +134,21 @@ def play_round(blackjack: type[Game], model: type[Net], wagers: List[float]):
         while not player.is_done():
 
             player_total, useable_ace = player.get_value()
-            nHand = player._get_cur_hand() # need this for isolating "split" moves.
 
             policy = player.get_valid_moves()
             policy = [p for p in policy if p != "surrender"]
 
             can_split = "split" in policy
-            first_move = len(player.cards[nHand]) == 2
+            can_double = "double" in policy
 
-            obs_t = tensor([player_total, house_show, useable_ace, can_split, first_move], dtype=float32).unsqueeze(0)
-            # _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
-            _, action_ind = model.act(obs=obs_t, method="argmax")
-            move = model.moves[action_ind[0].item()]
+            obs = (player_total, house_show, int(useable_ace), int(can_split), int(can_double))
+
+            obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+            # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
+            _, _, action_ind = model.act(obs=obs_t, method="argmax")
+            move = model.moves[action_ind[0][0].item()]
             if move not in policy:
-                return [[-3]]
+                return [[-3]] # I want this to be worse than doubling and losing. Really penalize faulty actions.
 
             blackjack.step_player(player, move)
 
