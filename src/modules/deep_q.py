@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from typing import List
 
 from src.helpers.deep_q import play_games
@@ -18,14 +19,12 @@ class Net(nn.Module):
         self.output_dim = len(self.moves)
         self.hidden_layers = hidden_layers
         self.fc_input = nn.Linear(self.input_dim, self.hidden_layers[0])
-        self.nonlinear = nn.ReLU()
         
         self.fc_hidden = []
         for i in range(len(self.hidden_layers)-1) :
             self.fc_hidden.append(nn.Linear(self.hidden_layers[i], self.hidden_layers[i+1]))
             
         self.fc_output = nn.Linear(self.hidden_layers[-1], self.output_dim)
-        self.softmax = nn.Softmax(dim=1)
 
 
     def mask(self, valid_moves):
@@ -38,9 +37,9 @@ class Net(nn.Module):
         
     def forward(self, data) :
         
-        x_t = self.nonlinear(self.fc_input(data))
+        x_t = F.relu(self.fc_input(data))
         for layer in self.fc_hidden :
-            x_t = self.nonlinear(layer(x_t))
+            x_t = F.relu(layer(x_t))
         return self.fc_output(x_t)
     
 
@@ -58,21 +57,22 @@ class Net(nn.Module):
 
         assert method in ["argmax", "softmax"], "must use a valid method"
 
-        q_values_t = self.forward(obs)
+        with torch.no_grad():
+            q_values_t = self.forward(obs)
 
-        q_avail_t = q_values_t
+            q_avail_t = q_values_t
 
-        if avail_actions:
-            mask_t = self.mask(avail_actions)
-            q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
+            if avail_actions:
+                mask_t = self.mask(avail_actions)
+                q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
 
-        if method == "argmax":
-            actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
-        else:
-            action_p = self.softmax(q_avail_t).detach().numpy()
-            actions_t = torch.tensor(list(map(lambda x : np.random.choice(x.shape[0], p=x), action_p))).unsqueeze(-1)
+            if method == "argmax":
+                actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
+            else:
+                action_p = F.softmax(q_avail_t, dim=1).detach().numpy()
+                actions_t = torch.tensor(list(map(lambda x : np.random.choice(x.shape[0], p=x), action_p))).unsqueeze(-1)
 
-        q_selection_t = torch.gather(q_avail_t, dim=1, index=actions_t)
+            q_selection_t = q_avail_t.gather(1, index=actions_t)
 
         return q_avail_t, q_selection_t, actions_t
 
@@ -97,14 +97,22 @@ class EarlyStop:
 
 class Trainer(EarlyStop):
     
-    def __init__(self, online_net: type[Net], target_net: type[Net], loss, optimizer, use_early_stop: bool=True):
+    def __init__(
+            self,
+            online_net: type[Net],
+            target_net: type[Net],
+            loss_fct,
+            optimizer_fct,
+            optimizer_kwargs,
+            use_early_stop: bool=True
+        ):
         EarlyStop.__init__(self, leniency=10)
         self.online_net = online_net
         self.target_net = target_net
         self.copy_online_to_target()
 
-        self.loss = loss
-        self.optimizer = optimizer
+        self.loss = loss_fct()
+        self.optimizer = optimizer_fct(self.online_net.parameters(), **optimizer_kwargs)
         self.use_early_stop = use_early_stop
         if use_early_stop:
             self.best_state = self.online_net.state_dict()
@@ -120,23 +128,23 @@ class Trainer(EarlyStop):
         rewards_t = torch.tensor([replay_buffer[i][3] for i in transition_inds], dtype=torch.float32).unsqueeze(-1)
         dones_t = torch.tensor([replay_buffer[i][4] for i in transition_inds], dtype=torch.float32).unsqueeze(-1)
         obs_next_t = torch.tensor([replay_buffer[i][5] or (0,0,0,0,0) for i in transition_inds], dtype=torch.float32)
-        a_s_next = [replay_buffer[i][6] or [] for i in transition_inds]
+        a_s_next = [replay_buffer[i][6] or ["stay"] for i in transition_inds]
 
         self.online_net.train()
-        self.optimizer.zero_grad()
 
         # target_q_argmax is determined for all next states, even if it's a terminal state.
         # For terminal states, results don't make sense, but it doesn't matter since dones_t will force us to ignore it anyways
 
-        _, target_q_argmax, _ = self.target_net.act(obs_next_t, method="argmax", avail_actions=a_s_next)
-        # _, target_q_argmax, _ = self.target_net.act(obs_next_t, method="argmax")
-        targets = rewards_t + torch.nan_to_num(gamma * (1 - dones_t) * target_q_argmax, nan=0)
+        with torch.no_grad():
+            _, target_q_argmax, _ = self.target_net.act(obs_next_t, method="argmax", avail_actions=a_s_next)
+            # _, target_q_argmax, _ = self.target_net.act(obs_next_t, method="argmax")
+            targets = rewards_t + torch.nan_to_num(gamma * (1 - dones_t) * target_q_argmax, nan=0)
 
         q_values = self.online_net.forward(obs_t)
-
-        action_q_values = torch.gather(input=q_values, dim=1, index=moves_t)
+        action_q_values = q_values.gather(1, moves_t)
         
         loss = self.loss(action_q_values, targets)
+        self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 

@@ -1,13 +1,17 @@
+from __future__ import annotations # required for preventing the cyclical import of type annotations
 from collections import deque
-from typing import List
+from typing import List, TYPE_CHECKING
 import numpy as np
 import torch
 import asyncio
 
 from src.modules.game import Game
-from src.modules.player import Player
-from src.modules.deep_q import Net
 from src.pydantic_types import StateActionPairDeep
+
+if TYPE_CHECKING:
+    # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
+    from src.modules.player import Player
+    from src.modules.deep_q import Net
 
 def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net], mode="random"):
     """ step to update the replay buffer """
@@ -19,6 +23,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
     blackjack.init_round([1])
     blackjack.deal_init()
 
+    if blackjack.house_blackjack: return
+
     player = blackjack.players[0]
     player: type[Player]
 
@@ -26,6 +32,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
     action_space = [[]]
     
     house_show = blackjack.get_house_show(show_value=True)
+
+    if blackjack.house_blackjack: return
 
     while not player.is_done() :
 
@@ -40,7 +48,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
         can_split = "split" in policy
         can_double = "double" in policy
 
-        obs = (player_total, house_show, int(useable_ace), int(can_split), int(can_double))
+        # I figure that using [-1,1] could help the ReLu fct more than [0,1]
+        obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1)
 
         if mode == "random":
             # move = np.random.choice(policy) # completely random within valid action space
@@ -57,11 +66,12 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
             move = model.moves[action_ind[0][0].item()]
         
         if move not in policy:
+            # Can change the penalty as a hyperparameter of learning process.
             buffer.append(
-                (obs, policy, move, -3, 1, None, None)
+                (obs, policy, move, -1.5, 1, None, None)
             )
             return
-
+        
         s_a_pair = StateActionPairDeep(
             player_show=player_total,
             house_show=house_show,
@@ -90,9 +100,9 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
             state_obs = (
                 s_a_pair.player_show,
                 s_a_pair.house_show,
-                int(s_a_pair.useable_ace),
-                int(s_a_pair.can_split),
-                int(s_a_pair.can_double)
+                2*int(s_a_pair.useable_ace)-1,
+                2*int(s_a_pair.can_split)-1,
+                2*int(s_a_pair.can_double)-1
             )
             move = s_a_pair.move
             reward = 0
@@ -100,7 +110,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
             a_s = action_space[i][j]
 
             if j == len(s_a_pair_hand) - 1:
-                reward = reward_hands[i]
+                # reward = reward_hands[i]
+                reward = sum(reward_hands)
                 state_obs_new = None
                 done = 1
                 a_s_new = None
@@ -109,9 +120,9 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
                 state_obs_new = (
                     look_forward.player_show,
                     look_forward.house_show,
-                    int(look_forward.useable_ace),
-                    int(look_forward.can_split),
-                    int(look_forward.can_double)
+                    2*int(look_forward.useable_ace)-1,
+                    2*int(look_forward.can_split)-1,
+                    2*int(look_forward.can_double)-1
                 )
                 a_s_new = action_space[i][j+1]
             
@@ -148,7 +159,7 @@ def play_round(blackjack: type[Game], model: type[Net], wagers: List[float]):
             _, _, action_ind = model.act(obs=obs_t, method="argmax")
             move = model.moves[action_ind[0][0].item()]
             if move not in policy:
-                return [[-3]] # I want this to be worse than doubling and losing. Really penalize faulty actions.
+                return [[-1]] # I can tinker with this value.
 
             blackjack.step_player(player, move)
 
