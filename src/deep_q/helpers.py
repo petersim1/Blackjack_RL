@@ -11,7 +11,7 @@ from src.pydantic_types import StateActionPairDeep
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
     from src.modules.player import Player
-    from src.modules.deep_q import Net
+    from deep_q.modules import Net
 
 def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net], mode="random"):
     """ step to update the replay buffer """
@@ -110,8 +110,8 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
             a_s = action_space[i][j]
 
             if j == len(s_a_pair_hand) - 1:
-                # reward = reward_hands[i]
-                reward = sum(reward_hands)
+                # reward = sum(reward_hands)
+                reward = reward_hands[i]
                 state_obs_new = None
                 done = 1
                 a_s_new = None

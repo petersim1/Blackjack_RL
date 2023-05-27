@@ -3,8 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List
+from copy import deepcopy
 
-from src.helpers.deep_q import play_games
+from deep_q.helpers import play_games
 
 class Net(nn.Module):
 
@@ -115,7 +116,7 @@ class Trainer(EarlyStop):
         self.optimizer = optimizer_fct(self.online_net.parameters(), **optimizer_kwargs)
         self.use_early_stop = use_early_stop
         if use_early_stop:
-            self.best_state = self.online_net.state_dict()
+            self.best_state = deepcopy(self.online_net.state_dict())
     
     def train_epoch(self, replay_buffer, batch_size, gamma):
         """ This step doesn't actually require inputs, it simply samples from the replay buffer. """
@@ -165,7 +166,7 @@ class Trainer(EarlyStop):
         if self.use_early_stop:
             self._update(mean_reward)
             if not self.counter:
-                self.best_state = self.online_net.state_dict()
+                self.best_state = deepcopy(self.online_net.state_dict())
 
         return mean_reward
 
