@@ -1,10 +1,19 @@
-from typing import Optional, List, Dict, Union
+from typing import List, Dict
 from pydantic import BaseModel
 
 class StateActionPair(BaseModel):
     player_show: int
     house_show: int
     useable_ace: bool
+    can_split: bool
+    move: str
+
+class StateActionPairDeep(BaseModel):
+    player_show: int
+    house_show: int
+    useable_ace: bool
+    can_split: bool
+    can_double: bool
     move: str
 
 class RulesI(BaseModel):

@@ -1,6 +1,5 @@
 from typing import List, Tuple
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 def plot_loss(array: List[float], every: int, label: str, include_max: bool=False) -> None:
@@ -63,15 +62,22 @@ def plot_mesh(axis, data, ranges, ticks=None):
 def generate_mesh(q: object) -> np.ndarray:
     value_det = np.zeros((3, 21+1, 11+1))
 
-    for (player, house, useable_ace), vals in q.items():
-        dict_no_split = {k:v for k,v in vals.items() if k != "split"}
-        value_det[int(useable_ace), player, house] = max(dict_no_split.values())
+    for (player, house, useable_ace, can_split), vals in q.items():
+        moves = ["stay", "hit", "double"]
+        if can_split:
+            moves.append("split")
 
-        if not player % 2:
+        dict_moves = {k:v for k,v in vals.items() if k in moves}
+        if not can_split:
+            value_det[int(useable_ace), player, house] = max(dict_moves.values())
+        else:
             player_ind = int(player / 2)
             if useable_ace:
-                player_ind = 11
-            value_det[2, player_ind, house] = max(vals.values())
+                if player == 12:
+                    player_ind = 11
+                else:
+                    continue
+            value_det[2, player_ind, house] =  max(dict_moves.values())
 
     return value_det
 
@@ -80,34 +86,27 @@ def generate_grid(q: object) -> Tuple[np.ndarray, np.ndarray]:
 
     fill = np.empty((3, 21+1, 11+1), dtype="O")
 
-    for (player, house, useable_ace), vals in q.items():
+    for (player, house, useable_ace, can_split), vals in q.items():
+        moves = ["stay", "hit", "double"]
+        if can_split:
+            moves.append("split")
+        dict_moves = {k:v for k,v in vals.items() if k in moves}
 
-        dict_no_split = {k:v for k,v in vals.items() if k != "split"}
+        max_val = max(dict_moves,key=dict_moves.get)
+        if not can_split:
+            if max_val == "double":
+                dict_no_double = {k:v for k,v in dict_moves.items() if k != "double"}
+                max_val = max_val[:2].title() + "/" + max(dict_no_double,key=dict_no_double.get)[:2].title()
+            else:
+                max_val = max_val[:2].title()
 
-        max_val = max(dict_no_split,key=dict_no_split.get)
-        if max_val == "double":
-            dict_no_double = {k:v for k,v in dict_no_split.items() if k != "double"}
-            max_val = max_val[:2].title() + "/" + max(dict_no_double,key=dict_no_double.get)[:2].title()
+            fill[int(useable_ace), player, house] = max_val
         else:
-            max_val = max_val[:2].title()
-
-        fill[int(useable_ace), player, house] = max_val
-
-        if not player % 2:
             player_ind = int(player / 2)
             if useable_ace:
                 if player == 12:
                     player_ind = 11
-                else:
-                    continue
-
-            max_val = max(vals,key=vals.get)
-            if max_val == "double":
-                dict_no_double = {k:v for k,v in vals.items() if k != "double"}
-                max_val = max_val[:2].title() + "/" + max(dict_no_double,key=dict_no_double.get)[:2].title()
-            else:
-                max_val = max_val[:2].title()
             
-            fill[2, player_ind, house] = max_val
+            fill[2, player_ind, house] = max_val[:2].title()
 
     return fill
