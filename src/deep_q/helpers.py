@@ -11,7 +11,7 @@ from src.pydantic_types import StateActionPairDeep
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
     from src.modules.player import Player
-    from deep_q.modules import Net
+    from src.deep_q.modules import Net
 
 def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net], mode="random"):
     """ step to update the replay buffer """
@@ -152,7 +152,7 @@ def play_round(blackjack: type[Game], model: type[Net], wagers: List[float]):
             can_split = "split" in policy
             can_double = "double" in policy
 
-            obs = (player_total, house_show, int(useable_ace), int(can_split), int(can_double))
+            obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1)
 
             obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
             # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])

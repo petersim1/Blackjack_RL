@@ -16,6 +16,15 @@ class StateActionPairDeep(BaseModel):
     can_double: bool
     move: str
 
+class StateActionPairDeepCount(BaseModel):
+    player_show: int
+    house_show: int
+    useable_ace: bool
+    can_split: bool
+    can_double: bool
+    count: int
+    move: str
+
 class RulesI(BaseModel):
     dealer_hit_soft17=True
     push_dealer22=False
