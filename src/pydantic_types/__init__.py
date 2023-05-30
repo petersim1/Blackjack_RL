@@ -22,7 +22,7 @@ class StateActionPairDeepCount(BaseModel):
     useable_ace: bool
     can_split: bool
     can_double: bool
-    count: int
+    count: float
     move: str
 
 class RulesI(BaseModel):

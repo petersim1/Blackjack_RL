@@ -48,8 +48,11 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
         can_split = "split" in policy
         can_double = "double" in policy
 
+        n_decks_remain = blackjack.cards.sum() / 52
+        true_count = blackjack.count / n_decks_remain
+
         # I figure that using [-1,1] could help the ReLu fct more than [0,1]
-        obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1, blackjack.count)
+        obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1, true_count)
 
         if mode == "random":
             # move = np.random.choice(policy) # completely random within valid action space
@@ -78,7 +81,7 @@ def update_replay_buffer(blackjack: type[Game], buffer: deque, model: type[Net],
             useable_ace=useable_ace,
             can_split=can_split,
             can_double=can_double,
-            count=blackjack.count,
+            count=true_count,
             move=move
         )
         s_a[nHand].append(s_a_pair)
@@ -155,7 +158,10 @@ def play_round(blackjack: type[Game], model: type[Net], wagers: List[float]):
             can_split = "split" in policy
             can_double = "double" in policy
 
-            obs = (player_total, house_show, int(useable_ace), int(can_split), int(can_double))
+            n_decks_remain = blackjack.cards.sum() / 52
+            true_count = blackjack.count / n_decks_remain
+
+            obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1, true_count)
 
             obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
             # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
@@ -196,9 +202,99 @@ async def play_games(model: type[Net], n_games: int, n_rounds: int, wagers: List
         blackjack = Game(**game_hyperparams)
         tasks.append(
             asyncio.create_task(
-            play_rounds(blackjack=blackjack, model=model, n_rounds=n_rounds, wagers=wagers)
+                play_rounds(blackjack=blackjack, model=model, n_rounds=n_rounds, wagers=wagers)
             ))
         
     rewards = await asyncio.gather(*tasks)
 
     return np.array(rewards)
+
+
+def play_round_gather_count(blackjack: type[Game], model: type[Net], wagers: List[float]):
+
+    model.eval()
+    
+    blackjack.init_round(wagers)
+    blackjack.deal_init()
+
+    house_show = blackjack.get_house_show(show_value=True)
+
+    n_decks_remain = blackjack.cards.sum() / 52
+    starting_true_count = round(blackjack.count / n_decks_remain)
+
+    for player in blackjack.players:
+        player: type[Player]
+        while not player.is_done():
+
+            player_total, useable_ace = player.get_value()
+
+            policy = player.get_valid_moves()
+            policy = [p for p in policy if p != "surrender"]
+
+            can_split = "split" in policy
+            can_double = "double" in policy
+
+            n_decks_remain = blackjack.cards.sum() / 52
+            true_count = blackjack.count / n_decks_remain
+
+            obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1, true_count)
+
+            obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+            # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
+            _, _, action_ind = model.act(obs=obs_t, method="argmax")
+            move = model.moves[action_ind[0][0].item()]
+            if move not in policy:
+                print(obs, move, policy)
+                return None, None
+
+            blackjack.step_player(player, move)
+
+    blackjack.step_house()
+    _, players_winnings = blackjack.get_results()
+
+    return starting_true_count, players_winnings
+
+
+async def play_rounds_gather_count(blackjack: type[Game], model: type[Net], n_rounds: int, wagers: List[float]):
+    count_winnings = {}
+
+    for _ in range(n_rounds):
+        count, players_rewards = play_round_gather_count(
+            blackjack=blackjack,
+            model=model,
+            wagers=wagers
+        )
+        if count is None: continue
+
+        if count not in count_winnings:
+            count_winnings[count] = []
+
+        for reward in players_rewards:
+            # reward is a list which represents the reward for each hand of a single player due to splitting.
+            count_winnings[count].append(sum(reward))
+
+    return count_winnings
+
+
+async def play_games_gather_count(model: type[Net], n_games: int, n_rounds: int, wagers: List[float], game_hyperparams: object):
+
+    tot_count_winnings = {}
+
+    tasks = []
+    for _ in range(n_games):
+        blackjack = Game(**game_hyperparams)
+        tasks.append(
+            asyncio.create_task(
+                play_rounds_gather_count(blackjack=blackjack, model=model, n_rounds=n_rounds, wagers=wagers)
+            ))
+        
+    count_winnings = await asyncio.gather(*tasks)
+
+    for count_obj in count_winnings:
+        for count,rewards in count_obj.items():
+            if count not in tot_count_winnings:
+                tot_count_winnings[count] = []
+            tot_count_winnings[count].extend(rewards)
+        
+
+    return tot_count_winnings
