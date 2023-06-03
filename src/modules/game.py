@@ -40,26 +40,18 @@ class Game :
 
             
     def _init_deck(self) -> None:
-        self.cards = np.array([self.n_decks*4]*len(card_map))
+        self.cards = np.array([self.n_decks * 4] * len(card_map))
         self.n_cards_played = 0 # In THIS deck.
-        self.count = 0
-        self.stop_card = int(self.n_decks*52*self.ratio_penetrate)
+        self.stop_card = int(self.n_decks * 52 * self.ratio_penetrate)
         
 
     def _init_players(self) -> None :
         self.players: List[type[Player]] = [Player(wager=wager, rules=self.rules.dict()) for wager in self.wagers]
         self.house: type[Player] = Player(0)
         
-
-    def _update_count(self, card: Union[int, str]) -> None :        
-        if 2 <= card_values[card] <=6 :
-            self.count += 1
-        if (card_values[card] >= 10) or (card_values[card] == 1) :
-            self.count -= 1
-
             
-    def _select_card(self, update_count: bool=True) -> Union[int, str]:
-        ind = np.random.choice(list(card_map.keys()),p=self.cards/self.cards.sum())
+    def _select_card(self) -> Union[int, str]:
+        ind = np.random.choice(list(card_map.keys()), p=self.cards / self.cards.sum())
         card = card_map[ind]
         if self.shrink_deck :
             self.cards[ind] -= 1
@@ -67,9 +59,6 @@ class Game :
         
         if (self.n_cards_played == self.stop_card) & self.shrink_deck :
             self.reset_deck_after_round = True
-        
-        if update_count :
-            self._update_count(card)
         
         return card
         
@@ -83,6 +72,7 @@ class Game :
         self.n_rounds_played += 1
         self.round_init = True
         self.house_blackjack = False
+        self.house_played = False
         
         if self.reset_deck_after_round : 
             self._init_deck()
@@ -103,23 +93,40 @@ class Game :
         
         assert self.round_init , 'Must initialize round before dealing'
 
-        for i in range(2) :
+        for _ in range(2) :
             for player in self.players :
                 card = self._select_card()
                 player._deal_card(card)
-            card = self._select_card(update_count=(1-i)) # first card is shown, 2nd is hidden
+            card = self._select_card()
             self.house._deal_card(card)
         
         house, _ = self.house._get_value_cards(self.house.cards[0])
         if house == 21 :
             self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance + surrender)
+
+    def get_count(self):
+
+        count = (self.cards[-5:] - self.cards[:5]).sum()
+
+        # Need to account for instances where hand was dealt, but house hasn't played yet.
+        # One of the cards will be hidden, so we'll need to adjust the count.
+        # once step_house() is called, the card is revealed so we no longer need to adjust.
+        if self.round_init:
+            if (not self.house_played) and (len(self.house.get_cards()[0])):
+                card_hidden = self.house.get_cards()[0][0]
+                if card_hidden in [2, 3, 4, 5, 6]:
+                    count -= 1
+                if card_hidden in [10, "J", "Q", "K", "A"]:
+                    count += 1
+
+        return count
         
 
     def get_house_show(self, show_value: bool=False) -> Union[int, str] :
         
         assert len(self.house.get_cards()[0]) , 'House has not been dealt yet'
         
-        card = self.house.get_cards()[0][0]
+        card = self.house.get_cards()[0][1]
         if show_value :
             return card_values[card] if card != 'A' else 11
         return card
@@ -129,12 +136,12 @@ class Game :
         
         # call _get_value_cards() instead of get_value(), house works differently than player...
         house, useable_ace = self.house._get_value_cards(self.house.cards[0])
-        self._update_count(self.house.cards[0][-1]) # 2nd card is now displayed, so adjust count.
         
         while (house < 17) or ((house == 17) and useable_ace and self.rules.dealer_hit_soft17) :
             card = self._select_card()
             self.house._deal_card(card)
             house, useable_ace = self.house._get_value_cards(self.house.cards[0])
+        self.house_played = True
             
 
     def step_player(self, player: type[Player], move: str) -> None :
