@@ -22,17 +22,18 @@ def update_replay_buffer(
     ):
     """ step to update the replay buffer """
 
-    assert mode in ["random", "argmax", "softmax"]
+    assert mode in ["random", "argmax", "softmax"], "must use a valid action selection mode."
 
     model.eval()
 
-    n_decks_remain = blackjack.cards.sum() / 52
-    true_count = blackjack.count / n_decks_remain
 
     blackjack.init_round([1])
     blackjack.deal_init()
 
     if blackjack.house_blackjack: return
+
+    count = blackjack.get_count()
+    true_count = count * 52 / blackjack.cards.sum()
 
     player = blackjack.players[0]
     player: type[Player]
@@ -96,8 +97,8 @@ def update_replay_buffer(
         blackjack.step_player(player, move)
 
         if continuous_count:
-            n_decks_remain = blackjack.cards.sum() / 52
-            true_count = blackjack.count / n_decks_remain
+            count = blackjack.get_count()
+            true_count = count * 52 / blackjack.cards.sum()
 
     blackjack.step_house()
 
@@ -117,7 +118,8 @@ def update_replay_buffer(
                 s_a_pair.count
             )
             move = s_a_pair.move
-            reward = 0.25*int(s_a_pair.move in ["hit", "split"])
+            # reward = 0.25*int(s_a_pair.move in ["hit", "split"])
+            reward = 0
             done = 0
             a_s = action_space[i][j]
 
@@ -152,12 +154,12 @@ def play_round(
     ):
 
     model.eval()
-
-    n_decks_remain = blackjack.cards.sum() / 52
-    true_count = blackjack.count / n_decks_remain
     
     blackjack.init_round(wagers)
     blackjack.deal_init()
+
+    count = blackjack.get_count()
+    true_count = count * 52 / blackjack.cards.sum()
 
     house_show = blackjack.get_house_show(show_value=True)
 
@@ -176,7 +178,6 @@ def play_round(
             obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1, true_count)
 
             obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
-            # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
             _, _, action_ind = model.act(obs=obs_t, method="argmax")
             move = model.moves[action_ind[0][0].item()]
             if move not in policy:
@@ -185,8 +186,8 @@ def play_round(
             blackjack.step_player(player, move)
 
             if continuous_count:
-                n_decks_remain = blackjack.cards.sum() / 52
-                true_count = blackjack.count / n_decks_remain
+                count = blackjack.get_count()
+                true_count = count * 52 / blackjack.cards.sum()
 
     blackjack.step_house()
     _, players_winnings = blackjack.get_results()
@@ -242,12 +243,12 @@ def play_round_gather_count(
     ):
 
     model.eval()
-
-    n_decks_remain = blackjack.cards.sum() / 52
-    true_count = blackjack.count / n_decks_remain
     
     blackjack.init_round(wagers)
     blackjack.deal_init()
+
+    count = blackjack.get_count()
+    true_count = count * 52 / blackjack.cards.sum()
 
     house_show = blackjack.get_house_show(show_value=True)
 
@@ -266,9 +267,9 @@ def play_round_gather_count(
             obs = (player_total, house_show, 2*int(useable_ace)-1, 2*int(can_split)-1, 2*int(can_double)-1, true_count)
 
             obs_t = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
-            # _, _, action_ind = model.act(obs=obs_t, method="argmax", avail_actions=[policy])
             _, _, action_ind = model.act(obs=obs_t, method="argmax")
             move = model.moves[action_ind[0][0].item()]
+
             if move not in policy:
                 print(obs, move, policy)
                 return None, None
@@ -276,8 +277,8 @@ def play_round_gather_count(
             blackjack.step_player(player, move)
 
             if continuous_count:
-                n_decks_remain = blackjack.cards.sum() / 52
-                true_count = blackjack.count / n_decks_remain
+                count = blackjack.get_count()
+                true_count = count * 52 / blackjack.cards.sum()
 
     blackjack.step_house()
     _, players_winnings = blackjack.get_results()
@@ -302,13 +303,14 @@ async def play_rounds_gather_count(
             **kwargs
         )
         if count is None: continue
-
-        if count not in count_winnings:
-            count_winnings[count] = []
+        
+        count_rounded = round(count)
+        if count_rounded not in count_winnings:
+            count_winnings[count_rounded] = []
 
         for reward in players_rewards:
             # reward is a list which represents the reward for each hand of a single player due to splitting.
-            count_winnings[count].append(sum(reward))
+            count_winnings[count_rounded].append(sum(reward))
 
     return count_winnings
 
