@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 
 class StateActionPair(BaseModel):
@@ -7,6 +7,13 @@ class StateActionPair(BaseModel):
     useable_ace: bool
     can_split: bool
     move: str
+
+class ReplayBuffer(BaseModel):
+    obs: tuple
+    move: str
+    reward: float
+    done: int
+    obs_next: Optional[tuple]
 
 class StateActionPairDeep(BaseModel):
     player_show: int

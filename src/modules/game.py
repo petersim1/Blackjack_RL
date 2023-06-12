@@ -124,11 +124,11 @@ class Game :
 
     def get_house_show(self, show_value: bool=False) -> Union[int, str] :
         
-        assert len(self.house.get_cards()[0]) , 'House has not been dealt yet'
+        assert len(self.house.get_cards()[0]) , "House has not been dealt yet"
         
         card = self.house.get_cards()[0][1]
         if show_value :
-            return card_values[card] if card != 'A' else 11
+            return card_values[card] if card != "A" else 11
         return card
              
 
