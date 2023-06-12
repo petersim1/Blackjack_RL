@@ -6,6 +6,7 @@ import torch
 
 from src.modules.game import Game
 from src.pydantic_types import ReplayBuffer
+from .eval import create_state_action
 
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
@@ -51,38 +52,20 @@ def state_action_generator(
 
     while not player.is_done() :
 
-        player_total, useable_ace = player.get_value()
-        nHand = player._get_cur_hand() # need this for isolating "split" moves.
-
-        policy = player.get_valid_moves()
-        policy = [p for p in policy if p != "surrender"]
-
-        can_split = "split" in policy
-        can_double = "double" in policy
-
-        # I figure that using [-1,1] could help the ReLU fct more than [0,1]
-
-        observation = get_observation(
-            include_count=include_count,
-            player_total=player_total,
+        is_valid_move, observation, move = create_state_action(
+            player=player,
             house_show=house_show,
-            useable_ace=2 * int(useable_ace) - 1,
-            can_split=2 * int(can_split) - 1,
-            can_double=2 * int(can_double) - 1,
-            count=true_count
-        )
-
-        move = get_action(
+            include_count=include_count,
+            true_count=true_count,
             model=model,
-            method=method,
-            observation=observation
+            method=method
         )
 
+        nHand = player._get_cur_hand() # need this for isolating "split" moves.
         s_a_pair = (observation, move)
-        
         s_a[nHand].append(s_a_pair)
 
-        if move not in policy:
+        if not is_valid_move:
             # Can change the penalty as a hyperparameter of learning process.
             return True, s_a
 
@@ -103,8 +86,8 @@ def buffer_collector(
         s_a_pairs: List[Tuple[Tuple, str]],
         rewards: List[float],
 ):
-    for i,s_a_pair_hand in enumerate(s_a_pairs):
-        for j,s_a_pair in enumerate(s_a_pair_hand):
+    for i, s_a_pair_hand in enumerate(s_a_pairs):
+        for j, s_a_pair in enumerate(s_a_pair_hand):
 
             state_obs = s_a_pair[0]
             move = s_a_pair[1]
@@ -136,7 +119,7 @@ def update_replay_buffer(
         model: type[Net],
         include_count: bool,
         include_continuous_count: bool,
-        misstep_penalty: float=-1.5,
+        misstep_penalty: float=-0.1,
         method: str="random",
 ):
     blackjack.init_round([1])

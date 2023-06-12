@@ -16,10 +16,12 @@ if TYPE_CHECKING:
 
 class Trainer:
 
-    def __init__(self, online_net, target_net, lr, replay_size):
+    def __init__(self, online_net, target_net, lr, replay_size, include_count):
 
         self.online_net: type[Net] = online_net
         self.target_net: type[Net] = target_net
+
+        self.include_count = include_count
 
         self.loss_fct = nn.SmoothL1Loss()
         self.optimizer = torch.optim.Adam(self.online_net.parameters(), lr=lr)
@@ -64,8 +66,6 @@ class Trainer:
     def update_buffer(
         self,
         blackjack: type[Game],
-        include_count: bool=False,
-        include_continuous_count: bool=False,
         misstep_penalty: float=-1.5,
         method: str="random"
     ):
@@ -74,8 +74,8 @@ class Trainer:
                 blackjack=blackjack,
                 buffer=self.replay_buffer,
                 model=self.online_net,
-                include_count=include_count,
-                include_continuous_count=include_continuous_count,
+                include_count=self.include_count,
+                include_continuous_count=False,
                 misstep_penalty=misstep_penalty,
                 method=method
             )
@@ -88,6 +88,7 @@ class Trainer:
             n_games=n_games,
             n_rounds=n_rounds,
             wagers=wagers,
+            include_count=self.include_count,
             game_hyperparams=game_hyperparams
         )
         mean_reward = np.mean(r[:,0,:])
