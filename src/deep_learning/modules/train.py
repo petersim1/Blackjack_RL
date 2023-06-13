@@ -34,10 +34,26 @@ class Trainer:
 
         self.target_net.load_state_dict(deepcopy(self.online_net.state_dict()))
 
+
+    def update_buffer(
+        self,
+        blackjack: type[Game],
+        method: str="random"
+    ):
+        with torch.no_grad():
+            update_replay_buffer(
+                blackjack=blackjack,
+                buffer=self.replay_buffer,
+                model=self.online_net,
+                include_count=self.include_count,
+                include_continuous_count=False,
+                method=method
+            )
+
     
     def train_epoch(self, batch_size: int, gamma: float):
 
-        obs_t, moves_t, rewards_t, dones_t, obs_next_t = gather_buffer_obs(
+        obs_t, action_space, moves_t, rewards_t, dones_t, obs_next_t, action_space_next = gather_buffer_obs(
             replay_buffer=self.replay_buffer,
             batch_size=batch_size,
             moves=self.online_net.moves
@@ -46,6 +62,7 @@ class Trainer:
         targets_t = gather_target_obs(
             target_net=self.target_net,
             obs_next_t=obs_next_t,
+            action_space_next=action_space_next,
             rewards_t=rewards_t,
             dones_t=dones_t,
             gamma=gamma
@@ -62,23 +79,6 @@ class Trainer:
         self.optimizer.step()
 
         return loss.item()
-
-    def update_buffer(
-        self,
-        blackjack: type[Game],
-        misstep_penalty: float=-1.5,
-        method: str="random"
-    ):
-        with torch.no_grad():
-            update_replay_buffer(
-                blackjack=blackjack,
-                buffer=self.replay_buffer,
-                model=self.online_net,
-                include_count=self.include_count,
-                include_continuous_count=False,
-                misstep_penalty=misstep_penalty,
-                method=method
-            )
 
     async def eval(self, n_games: int, n_rounds: int, wagers, game_hyperparams):
         self.online_net.eval()

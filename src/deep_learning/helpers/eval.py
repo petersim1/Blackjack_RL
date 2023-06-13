@@ -19,39 +19,17 @@ def get_observation(include_count: bool, **kwargs):
     return (kwargs["player_total"], kwargs["house_show"], kwargs["useable_ace"], kwargs["can_split"], kwargs["can_double"])
 
 
-def get_action(model: type[Net], method: str, observation: tuple) -> str:
+def get_action(model: type[Net], method: str, policy: List[str], observation: tuple) -> str:
 
     if method == "random":
-        move = np.random.choice(model.moves)
+        move = np.random.choice(policy)
         return move
-    
-    obs_t = torch.tensor(observation, dtype=torch.float32).unsqueeze(0)
-    _, _, action_ind = model.act(obs=obs_t, method=method)
-    move = model.moves[action_ind[0][0].item()]
+    with torch.no_grad():
+        obs_t = torch.tensor(observation, dtype=torch.float32).unsqueeze(0)
+        _, _, action_ind = model.act(obs=obs_t, method=method, avail_actions=[policy])
+        move = model.moves[action_ind[0][0].item()]
 
     return move
-
-def create_state(player: type[Player], house_show: int, include_count: bool, true_count: float):
-
-    player_total, useable_ace = player.get_value()
-
-    policy = player.get_valid_moves()
-    policy = [p for p in policy if p != "surrender"]
-
-    can_split = "split" in policy
-    can_double = "double" in policy
-
-    observation = get_observation(
-            include_count=include_count,
-            player_total=player_total,
-            house_show=house_show,
-            useable_ace=2 * int(useable_ace) - 1,
-            can_split=2 * int(can_split) - 1,
-            can_double=2 * int(can_double) - 1,
-            count=true_count
-        )
-
-    return observation
 
 
 def create_state_action(
@@ -62,25 +40,32 @@ def create_state_action(
         model: type[Net],
         method: str="argmax"
 ):
+    player_total, useable_ace = player.get_value()
+
     policy = player.get_valid_moves()
     policy = [p for p in policy if p != "surrender"]
 
-    observation = create_state(
-        player=player,
-        house_show=house_show,
+    can_split = "split" in policy
+    can_double = "double" in policy
+
+    observation = get_observation(
         include_count=include_count,
-        true_count=true_count
+        player_total=player_total,
+        house_show=house_show,
+        useable_ace=2 * int(useable_ace) - 1,
+        can_split=2 * int(can_split) - 1,
+        can_double=2 * int(can_double) - 1,
+        count=true_count
     )
 
     move = get_action(
         model=model,
         method=method,
+        policy=policy,
         observation=observation
     )
 
-    is_valid_move = move in policy
-
-    return is_valid_move, observation, move
+    return observation, move, policy
 
 
 def play_round(
@@ -105,7 +90,7 @@ def play_round(
         player: type[Player]
         while not player.is_done():
 
-            is_valid_move, _, move = create_state_action(
+            _, move, _ = create_state_action(
                 player=player,
                 house_show=house_show,
                 include_count=include_count,
@@ -113,9 +98,6 @@ def play_round(
                 model=model,
                 method=method
             )
-
-            if not is_valid_move:
-                return [[-1.5]] # I can tinker with this value.
 
             blackjack.step_player(player, move)
 

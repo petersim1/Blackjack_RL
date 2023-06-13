@@ -10,27 +10,12 @@ class StateActionPair(BaseModel):
 
 class ReplayBuffer(BaseModel):
     obs: tuple
+    action_space: List[str]
     move: str
     reward: float
     done: int
     obs_next: Optional[tuple]
-
-class StateActionPairDeep(BaseModel):
-    player_show: int
-    house_show: int
-    useable_ace: bool
-    can_split: bool
-    can_double: bool
-    move: str
-
-class StateActionPairDeepCount(BaseModel):
-    player_show: int
-    house_show: int
-    useable_ace: bool
-    can_split: bool
-    can_double: bool
-    count: float
-    move: str
+    action_space_next: Optional[List[str]]
 
 class RulesI(BaseModel):
     dealer_hit_soft17=True

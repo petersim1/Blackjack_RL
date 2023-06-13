@@ -54,21 +54,20 @@ class Net(nn.Module):
 
         assert method in ["argmax", "softmax"], "must use a valid method"
 
-        with torch.no_grad():
-            q_values_t = self.forward(obs)
+        q_values_t = self.forward(obs)
 
-            q_avail_t = q_values_t
+        q_avail_t = q_values_t
 
-            if avail_actions:
-                mask_t = self.mask(avail_actions)
-                q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
+        if avail_actions:
+            mask_t = self.mask(avail_actions)
+            q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
 
-            if method == "argmax":
-                actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
-            else:
-                action_p = F.softmax(q_avail_t, dim=1).detach().numpy()
-                actions_t = torch.tensor(list(map(lambda x : np.random.choice(x.shape[0], p=x), action_p))).unsqueeze(-1)
+        if method == "argmax":
+            actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
+        else:
+            action_p = F.softmax(q_avail_t, dim=1).detach().numpy()
+            actions_t = torch.tensor(list(map(lambda x : np.random.choice(x.shape[0], p=x), action_p))).unsqueeze(-1)
 
-            q_selection_t = q_avail_t.gather(1, index=actions_t)
+        q_selection_t = q_avail_t.gather(1, index=actions_t)
 
         return q_avail_t, q_selection_t, actions_t

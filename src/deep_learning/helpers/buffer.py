@@ -1,8 +1,6 @@
 from __future__ import annotations # required for preventing the cyclical import of type annotations
 from collections import deque
 from typing import List, Tuple, TYPE_CHECKING
-import numpy as np
-import torch
 
 from src.modules.game import Game
 from src.pydantic_types import ReplayBuffer
@@ -14,27 +12,6 @@ if TYPE_CHECKING:
     from src.deep_learning.modules import Net
 
 
-def get_observation(include_count: bool, **kwargs):
-
-    if include_count:
-        return (kwargs["player_total"], kwargs["house_show"], kwargs["useable_ace"], kwargs["can_split"], kwargs["can_double"], kwargs["count"])
-    
-    return (kwargs["player_total"], kwargs["house_show"], kwargs["useable_ace"], kwargs["can_split"], kwargs["can_double"])
-
-
-def get_action(model: type[Net], method: str, observation: tuple) -> str:
-
-    if method == "random":
-        move = np.random.choice(model.moves)
-        return move
-    
-    obs_t = torch.tensor(observation, dtype=torch.float32).unsqueeze(0)
-    _, _, action_ind = model.act(obs=obs_t, method=method)
-    move = model.moves[action_ind[0][0].item()]
-
-    return move
-
-
 def state_action_generator(
         blackjack: type[Game],
         player: type[Player],
@@ -42,7 +19,7 @@ def state_action_generator(
         include_count: bool,
         include_continuous_count: bool,
         method: str="random",
-) -> Tuple[bool, List[List[Tuple]]]:
+) -> List[List[Tuple]]:
     house_show = blackjack.get_house_show(show_value=True)
 
     count = blackjack.get_count()
@@ -52,7 +29,7 @@ def state_action_generator(
 
     while not player.is_done() :
 
-        is_valid_move, observation, move = create_state_action(
+        observation, move, policy = create_state_action(
             player=player,
             house_show=house_show,
             include_count=include_count,
@@ -62,12 +39,8 @@ def state_action_generator(
         )
 
         nHand = player._get_cur_hand() # need this for isolating "split" moves.
-        s_a_pair = (observation, move)
+        s_a_pair = (observation, move, policy)
         s_a[nHand].append(s_a_pair)
-
-        if not is_valid_move:
-            # Can change the penalty as a hyperparameter of learning process.
-            return True, s_a
 
         if move == "split" :
             s_a.append(s_a[nHand].copy())
@@ -78,7 +51,7 @@ def state_action_generator(
             count = blackjack.get_count()
             true_count = count * 52 / blackjack.cards.sum()
 
-    return False, s_a
+    return s_a
 
 
 def buffer_collector(
@@ -91,6 +64,7 @@ def buffer_collector(
 
             state_obs = s_a_pair[0]
             move = s_a_pair[1]
+            action_space = s_a_pair[2]
             # might want to further incentivize hitting
             # reward = 0.25*int(s_a_pair.move in ["hit", "split"])
             reward = 0
@@ -99,17 +73,21 @@ def buffer_collector(
             if j == len(s_a_pair_hand) - 1:
                 # reward = sum(reward_hands)
                 reward = rewards[i]
-                state_obs_new = None
+                state_obs_next = None
+                action_space_next = None
                 done = 1
             else:
-                state_obs_new = s_a_pair_hand[j+1][0]
+                state_obs_next = s_a_pair_hand[j+1][0]
+                action_space_next = s_a_pair_hand[j+1][2]
 
             buffer.append(ReplayBuffer(
                 obs=state_obs,
+                action_space=action_space,
                 move=move,
                 reward=reward,
                 done=done,
-                obs_next=state_obs_new
+                obs_next=state_obs_next,
+                action_space_next=action_space_next
             ))
 
 
@@ -119,7 +97,6 @@ def update_replay_buffer(
         model: type[Net],
         include_count: bool,
         include_continuous_count: bool,
-        misstep_penalty: float=-0.1,
         method: str="random",
 ):
     blackjack.init_round([1])
@@ -129,7 +106,7 @@ def update_replay_buffer(
 
     player: type[Player] = blackjack.players[0]
 
-    misstep, s_a_pairs = state_action_generator(
+    s_a_pairs = state_action_generator(
         blackjack=blackjack,
         player=player,
         model=model,
@@ -138,12 +115,8 @@ def update_replay_buffer(
         method=method,
     )
 
-    # if we take an invalid move, we can't advance the blackjack module.
-    # force the misstep penalty as the rewards. Otherwise, proceed with module.
-    reward_hands = [misstep_penalty for _ in player.cards]
-    if not misstep:
-        blackjack.step_house()
-        _, reward_hands = player.get_result(blackjack.house.cards[0])
+    blackjack.step_house()
+    _, reward_hands = player.get_result(blackjack.house.cards[0])
     
     buffer_collector(
         buffer=buffer,
