@@ -6,7 +6,8 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 import numpy as np
 
-from src.deep_learning.helpers import gather_buffer_obs, gather_target_obs, update_replay_buffer, play_games
+from src.deep_learning.utils.replay_buffer import gather_buffer_obs, gather_target_obs, update_replay_buffer
+from src.deep_learning.utils.play import play_games
 
 
 if TYPE_CHECKING:
@@ -70,11 +71,11 @@ class Trainer:
 
         self.online_net.train()
 
-        q_values = self.online_net.forward(obs_t)
+        q_values: torch.Tensor = self.online_net.forward(obs_t)
         action_q_values = q_values.gather(1, moves_t)
-        
+
         self.optimizer.zero_grad()
-        loss = self.loss_fct(action_q_values, targets_t)
+        loss: torch.Tensor = self.loss_fct(action_q_values, targets_t)
         loss.backward()
         self.optimizer.step()
 

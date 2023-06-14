@@ -44,3 +44,5 @@ def gather_target_obs(
         targets_t = rewards_t + torch.nan_to_num(gamma * (1 - dones_t) * target_q_argmax, nan=0)
 
     return targets_t
+
+__all__ = ["gather_buffer_obs", "gather_target_obs"]

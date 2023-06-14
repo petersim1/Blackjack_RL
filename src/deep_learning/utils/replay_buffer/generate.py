@@ -4,7 +4,7 @@ from typing import List, Tuple, TYPE_CHECKING
 
 from src.modules.game import Game
 from src.pydantic_types import ReplayBuffer
-from .eval import create_state_action
+from ..play import create_state_action
 
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
@@ -59,6 +59,12 @@ def buffer_collector(
         s_a_pairs: List[Tuple[Tuple, str]],
         rewards: List[float],
 ):
+    """
+    Gathering of rewards with state-action pairs.
+    The most challenging part is figuring out how to handle rewards for splitting.
+    - treat as normal. Invidual reward per hand
+    - for each split observation (2 are generated per split), give each the average total reward.
+    """
     for i, s_a_pair_hand in enumerate(s_a_pairs):
         for j, s_a_pair in enumerate(s_a_pair_hand):
 
@@ -71,12 +77,17 @@ def buffer_collector(
             done = 0
 
             if j == len(s_a_pair_hand) - 1:
-                # reward = sum(reward_hands)
+                # I leaning towards taking mean reward, versus reward of each separate split hand
+                # This is because, there's no guarantee that sampling the replay buffer will pick up
+                # all observations.
+                # reward = sum(rewards) / len(rewards)
                 reward = rewards[i]
                 state_obs_next = None
                 action_space_next = None
                 done = 1
             else:
+                if move == "split":
+                    reward = sum(rewards) / len(rewards)
                 state_obs_next = s_a_pair_hand[j+1][0]
                 action_space_next = s_a_pair_hand[j+1][2]
 

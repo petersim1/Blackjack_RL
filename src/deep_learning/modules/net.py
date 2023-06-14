@@ -5,12 +5,16 @@ import numpy as np
 
 class Net(nn.Module):
 
-    def __init__(self, input_dim, hidden_layers=[]) :
+    def __init__(self, input_dim, hidden_layers=[], allow_surrender=False) :
         super().__init__()
         
         assert len(hidden_layers) , "must have at least 1 hidden layer"
-        
+
         self.moves = ["stay", "hit", "double", "split"]
+        if allow_surrender:
+            self.moves += ["surrender"]
+
+        self.allow_surrender = allow_surrender
 
         self.input_dim = input_dim
         self.output_dim = len(self.moves)
@@ -43,11 +47,11 @@ class Net(nn.Module):
     def act(self, obs, method="argmax", avail_actions=[]):
         """
         inputs:
-        - obs: (batch_size, 5)
+        - obs: (batch_size, input_dim)
         - avail_actions: empty or (batch_size, n_i)
 
         returns: 
-        - q_avail_t: (batch_size, 5)
+        - q_avail_t: (batch_size, len(self.moves))
         - q_selection_t: (batch_size, 1)
         - actions_t: (batch_size, 1)
         """

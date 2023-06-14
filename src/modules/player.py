@@ -36,21 +36,31 @@ class Player:
     
 
     def _deal_card(self, card: Union[int, str]) -> None:
+        """
+        Updated slightly. Mark as complete if:
+        - natural blackjack
+        - bust
+        - (NEW) exactly 21 (including non-natural blackjack)
+        This simplifies to marking as done if total >= 21
+        """
+
         i_hand = self._get_cur_hand()
         self.cards[i_hand].append(card)
         total, _ = self._get_value_cards(self.cards[i_hand])
 
-        # Natural blackjack, want to mark as ended immediately.
-        # Can"t get natural blackjack after splits, so let user select a policy (only stay).
-        natural_blackjack = (total == 21) and (len(self.cards[i_hand]) == 2) and (len(self.cards) == 1)
-        bust = total > 21
+        # natural_blackjack = (total == 21) and (len(self.cards[i_hand]) == 2) and (len(self.cards) == 1)
+        # is_21 = total == 21
+        # bust = total > 21
 
-        self.complete[i_hand] = natural_blackjack or bust
+        self.complete[i_hand] = total >= 21
 
 
     def _split(self, cards: List[Union[int, str]]) -> None:
         """handles splitting of cards"""
         i_hand = self._get_cur_hand()
+
+        self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
+
         card = self.cards[i_hand].pop(-1)
         self.cards.insert(i_hand + 1, [card])
         self.wager.insert(i_hand + 1, self.base_wager)
@@ -58,6 +68,18 @@ class Player:
         
         self.cards[i_hand].append(cards[0])
         self.cards[i_hand+1].append(cards[1])
+
+        if self._get_value_cards(self.cards[i_hand])[0] == 21:
+            self.complete[i_hand] = True
+
+        if self._get_value_cards(self.cards[i_hand + 1])[0] == 21:
+            self.complete[i_hand + 1] = True
+
+        if self.aces_split and (not self.rules.hit_after_split_aces) :
+            if cards[0] != "A":
+                self.complete[i_hand] = True
+            if cards[1] != "A":
+                self.complete[i_hand+1] = True
     
 
     def _get_value_cards(self, cards: List[Union[int, str]]) -> Tuple[int, bool] :
@@ -130,13 +152,7 @@ class Player:
             self._deal_card(cards_give[0])
             self.complete[i_hand] = True
         if move == "split":
-            self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
             self._split(cards_give)
-            if (not self.rules.hit_after_split_aces) and self.aces_split :
-                if cards_give[0] != "A":
-                    self.complete[i_hand] = True
-                if cards_give[1] != "A":
-                    self.complete[i_hand+1] = True
         if move == "surrender":
             self.surrendered = True
             self.complete[i_hand] = True
