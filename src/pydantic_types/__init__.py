@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 
 class StateActionPair(BaseModel):
@@ -8,13 +8,14 @@ class StateActionPair(BaseModel):
     can_split: bool
     move: str
 
-class StateActionPairDeep(BaseModel):
-    player_show: int
-    house_show: int
-    useable_ace: bool
-    can_split: bool
-    can_double: bool
+class ReplayBuffer(BaseModel):
+    obs: tuple
+    action_space: List[str]
     move: str
+    reward: float
+    done: int
+    obs_next: Optional[tuple]
+    action_space_next: Optional[List[str]]
 
 class RulesI(BaseModel):
     dealer_hit_soft17=True

@@ -6,12 +6,12 @@ from src.pydantic_types import RulesI
 
 class Player:
     """
-    This module is to be used as an individual blackjack player
-    It is intended to be wrapped into the Game module, which controls the blackjack game.
+    This module is to be used as an individual blackjack player.
+    It is intended to be wrapped into the Game module, which controls the blackjack game entirely.
 
     In the Game module, in each round, this module is reset.
 
-    We don't care for insurance bets, as they are side bets, so we'll ignore completely.
+    We don't care for insurance bets, as they are side bets essentially, so we'll ignore completely.
     """
     
     def __init__(self, wager: float, rules: object={}) -> None :
@@ -36,33 +36,57 @@ class Player:
     
 
     def _deal_card(self, card: Union[int, str]) -> None:
+        """
+        Updated slightly. Mark as complete if:
+        - natural blackjack
+        - bust
+        - (NEW) exactly 21 (including non-natural blackjack)
+        This simplifies to marking as done if total >= 21
+        """
+
         i_hand = self._get_cur_hand()
         self.cards[i_hand].append(card)
         total, _ = self._get_value_cards(self.cards[i_hand])
-        if (total == 21) and (len(self.cards[i_hand]) == 2) and (len(self.cards) == 1):
-            # Natural blackjack, want to mark as ended immediately.
-            # Can't get natural blackjack after splits, so let user select a policy (only stay).
-            self.complete[i_hand] = True
-        if total > 21:
-            self.complete[i_hand] = True
+
+        # natural_blackjack = (total == 21) and (len(self.cards[i_hand]) == 2) and (len(self.cards) == 1)
+        # is_21 = total == 21
+        # bust = total > 21
+
+        self.complete[i_hand] = total >= 21
 
 
     def _split(self, cards: List[Union[int, str]]) -> None:
+        """handles splitting of cards"""
         i_hand = self._get_cur_hand()
+
+        self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
+
         card = self.cards[i_hand].pop(-1)
-        self.cards.insert(i_hand+1,[card])
-        self.wager.insert(i_hand+1,self.base_wager)
-        self.complete.insert(i_hand+1,False)
+        self.cards.insert(i_hand + 1, [card])
+        self.wager.insert(i_hand + 1, self.base_wager)
+        self.complete.insert(i_hand + 1, False)
         
         self.cards[i_hand].append(cards[0])
         self.cards[i_hand+1].append(cards[1])
+
+        if self._get_value_cards(self.cards[i_hand])[0] == 21:
+            self.complete[i_hand] = True
+
+        if self._get_value_cards(self.cards[i_hand + 1])[0] == 21:
+            self.complete[i_hand + 1] = True
+
+        if self.aces_split and (not self.rules.hit_after_split_aces) :
+            if cards[0] != "A":
+                self.complete[i_hand] = True
+            if cards[1] != "A":
+                self.complete[i_hand+1] = True
     
 
     def _get_value_cards(self, cards: List[Union[int, str]]) -> Tuple[int, bool] :
         """ gets the card total, and whether there's a useable ace, for a given set of cards """
         useable_ace = False
         total = sum([card_values[card] for card in cards])
-        if cards.count('A') :
+        if cards.count("A") :
             if total <= 11 :
                 total += 10
                 useable_ace = total < 21
@@ -83,7 +107,7 @@ class Player:
         if i_hand is None :
             return possible_moves
         
-        val, _ = self.get_value()
+        total, _ = self.get_value()
         
         n_hands = len(self.cards)
         n = len(self.cards[i_hand])
@@ -94,48 +118,42 @@ class Player:
         can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
         can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
-        if val < 21 :
+        if total < 21 :
             if can_stay: possible_moves.append("stay")
             if can_hit : possible_moves.append("hit")
-            if can_split : possible_moves.append('split')
-            if can_surrender : possible_moves.append('surrender')
-            if can_double : possible_moves.append('double')
-        if val == 21 :
+            if can_split : possible_moves.append("split")
+            if can_surrender : possible_moves.append("surrender")
+            if can_double : possible_moves.append("double")
+        if total == 21 :
             possible_moves.append("stay")
         
         return possible_moves
     
     
     def get_num_cards_draw(self, move: str) -> int :
-        if move in ['hit','double'] :
+        if move in ["hit","double"] :
             return 1
-        if move == 'split' :
+        if move == "split" :
             return 2
         return 0
     
     
     def step(self, move: str, cards_give: List[Union[int, str]]=[]) -> None:
-        assert not self._all_complete() , 'Player cannot move anymore!'
-        assert len(cards_give) == self.get_num_cards_draw(move) , 'Must provide proper # of cards!'
+        assert not self._all_complete() , "Player cannot move anymore!"
+        assert len(cards_give) == self.get_num_cards_draw(move) , "Must provide proper # of cards!"
         
         i_hand = self._get_cur_hand()
-        if move == 'hit':
+        if move == "hit":
             self._deal_card(cards_give[0]) 
-        if move == 'stay':
+        if move == "stay":
             self.complete[i_hand] = True
-        if move == 'double':
+        if move == "double":
             self.wager[i_hand] *= 2
             self._deal_card(cards_give[0])
             self.complete[i_hand] = True
-        if move == 'split':
-            self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
+        if move == "split":
             self._split(cards_give)
-            if (not self.rules.hit_after_split_aces) and self.aces_split :
-                if cards_give[0] != "A":
-                    self.complete[i_hand] = True
-                if cards_give[1] != "A":
-                    self.complete[i_hand+1] = True
-        if move == 'surrender':
+        if move == "surrender":
             self.surrendered = True
             self.complete[i_hand] = True
 
@@ -148,42 +166,42 @@ class Player:
         blackjack_payout = 1.2 if self.rules.reduced_blackjack_payout else 1.5
 
         house_value, _ = self._get_value_cards(house_cards)
-        house_is_blackjack = (house_value==21) & (len(house_cards)==2)
+        house_is_blackjack = (house_value == 21) & (len(house_cards) == 2)
         
         text = []
         winnings = []
         if self.surrendered :
-            return [['surrender'], [-self.base_wager/2]]
+            return [["surrender"], [-self.base_wager / 2]]
         for i,cards in enumerate(self.cards) :
             val, _ = self._get_value_cards(cards)
-            # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
-            is_blackjack = (val==21) & (len(cards)==2) & (len(self.cards) == 1)
+            # 21 after a split is not natural blackjack. It"s just 21, even on first two cards.
+            is_blackjack = (val == 21) & (len(cards) == 2) & (len(self.cards) == 1)
             
             if val > 21 :
-                text.append('bust')
+                text.append("bust")
                 winnings.append(-self.wager[i])
             if val == 21 :
                 if is_blackjack :
                     if house_is_blackjack :
-                        text.append('push')
+                        text.append("push")
                         winnings.append(0)
                     else :
-                        text.append('blackjack')
-                        winnings.append(self.wager[i]*blackjack_payout)
+                        text.append("blackjack")
+                        winnings.append(self.wager[i] * blackjack_payout)
                 else :
                     if house_is_blackjack :
-                        text.append('loss')
+                        text.append("loss")
                         winnings.append(-self.wager[i])
                     else :
                         if house_value == 21 :
-                            text.append('push')
+                            text.append("push")
                             winnings.append(0)
                         else :
                             if (self.rules.push_dealer22 and (house_value == 22)) : 
                                 text.append("push")
                                 winnings.append(0)
                             else :
-                                text.append('win')
+                                text.append("win")
                                 winnings.append(self.wager[i])
             if val < 21 :
                 if house_value > 21 :
@@ -191,17 +209,17 @@ class Player:
                         text.append("push")
                         winnings.append(0)
                     else :
-                        text.append('win')
+                        text.append("win")
                         winnings.append(self.wager[i])
                 else :
                     if val > house_value :
-                        text.append('win')
+                        text.append("win")
                         winnings.append(self.wager[i])
                     elif val < house_value :
-                        text.append('loss')
+                        text.append("loss")
                         winnings.append(-self.wager[i])
                     else :
-                        text.append('push')
+                        text.append("push")
                         winnings.append(0)
     
         return text, winnings

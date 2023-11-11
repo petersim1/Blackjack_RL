@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from typing import List
 from copy import deepcopy
 
-from deep_q.helpers import play_games
+from src.deep_q.helpers import play_games
 
 class Net(nn.Module):
 
