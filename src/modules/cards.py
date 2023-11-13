@@ -69,7 +69,7 @@ class Cards:
     def remove_card(self, ind: int) -> None:
         if ind >= len(self.cards):
             raise Exception("invalid index used")
-        self.cards.pop(ind)
+        return self.cards.pop(ind)
 
     @_decorator
     def clear_cards(self):

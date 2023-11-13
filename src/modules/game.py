@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
-import numpy as np
 from typing import List, Union, Tuple
-from src.constants import card_values, card_map
+
+from src.modules.cards import Cards, Card
 from src.modules.player import Player
 from src.pydantic_types import RulesI
 
@@ -33,24 +33,20 @@ class Game :
         self._init_deck()
                 
     def _init_deck(self) -> None:
-        self.cards = np.array([self.n_decks * 4] * len(card_map))
+        self.cards = Cards.init_from_deck(self.n_decks)
         self.n_cards_played = 0 # In THIS deck.
         self.stop_card = int(self.n_decks * 52 * self.ratio_penetrate)
         
 
     def _init_players(self) -> None :
-        self.players: List[type[Player]] = [Player(wager=wager, rules=self.rules.dict()) for wager in self.wagers]
-        self.house: type[Player] = Player(0)
+        self.players = [Player(wager=wager, rules=self.rules.dict()) for wager in self.wagers]
+        self.house = Player(0)
         
             
-    def _select_card(self) -> Union[int, str]:
-        ind = np.random.choice(list(card_map.keys()), p=self.cards / self.cards.sum())
-        card = card_map[ind]
-        if self.shrink_deck :
-            self.cards[ind] -= 1
-            self.n_cards_played += 1
+    def _select_card(self) -> Card:
+        card = self.cards.select_card(deplete=self.shrink_deck)
         
-        if (self.n_cards_played == self.stop_card) & self.shrink_deck :
+        if (len(self.cards) == self.stop_card) & self.shrink_deck :
             self.reset_deck_after_round = True
         
         return card
@@ -93,8 +89,7 @@ class Game :
             card = self._select_card()
             self.house._deal_card(card)
         
-        house, _ = self.house._get_value_cards(self.house.cards[0])
-        if house == 21 :
+        if self.house.cards[0].total == 21 :
             self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance + surrender)
 
     def get_count(self):
@@ -105,8 +100,8 @@ class Game :
         # One of the cards will be hidden, so we'll need to adjust the count.
         # once step_house() is called, the card is revealed so we no longer need to adjust.
         if self.round_init:
-            if (not self.house_played) and (len(self.house.get_cards()[0])):
-                card_hidden = self.house.get_cards()[0][0]
+            if (not self.house_played) and (len(self.house.get_cards()[0].cards)):
+                card_hidden = self.house.get_cards()[0].cards[0].card
                 if card_hidden in [2, 3, 4, 5, 6]:
                     count -= 1
                 if card_hidden in [10, "J", "Q", "K", "A"]:
@@ -117,23 +112,25 @@ class Game :
 
     def get_house_show(self, show_value: bool=False) -> Union[int, str] :
         
-        assert len(self.house.get_cards()[0]) , "House has not been dealt yet"
+        assert len(self.house.get_cards()[0].cards) , "House has not been dealt yet"
         
-        card = self.house.get_cards()[0][1]
+        card = self.house.get_cards()[0].cards[1]
         if show_value :
-            return card_values[card] if card != "A" else 11
+            return card.value if card.card != "A" else 11
         return card
              
 
     def step_house(self) -> None :
         
         # call _get_value_cards() instead of get_value(), house works differently than player...
-        house, useable_ace = self.house._get_value_cards(self.house.cards[0])
+        house = self.house.cards[0].total
+        useable_ace = self.house.cards[0].useable_ace
         
         while (house < 17) or ((house == 17) and useable_ace and self.rules.dealer_hit_soft17) :
             card = self._select_card()
             self.house._deal_card(card)
-            house, useable_ace = self.house._get_value_cards(self.house.cards[0])
+            house = self.house.cards[0].total
+            useable_ace = self.house.cards[0].useable_ace
         self.house_played = True
             
 
