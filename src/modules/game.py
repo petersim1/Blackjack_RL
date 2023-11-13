@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 import numpy as np
 from typing import List, Union, Tuple
 from src.constants import card_values, card_map
@@ -5,6 +6,7 @@ from src.modules.player import Player
 from src.pydantic_types import RulesI
 
 
+@dataclass
 class Game :
 
     """
@@ -19,26 +21,17 @@ class Game :
         
         MUST call init_round() to start the round
     """
-    
-    def __init__(
-            self,
-            shrink_deck: bool=True,
-            n_decks: int=6,
-            ratio_penetrate: float=4/6,
-            rules: object={}
-        ) -> None:
-        
-        self.shrink_deck = shrink_deck # if False, will randomly select cards uniformly, and deck won't run out.
-        self.n_decks = n_decks
-        self.ratio_penetrate = ratio_penetrate
-        self.n_rounds_played = 0
-        self.reset_deck_after_round = False
-        self.round_init = False
-        self.rules = RulesI(**rules)
-        
-        self._init_deck()
+    shrink_deck: bool = False # if False, will randomly select cards uniformly, and deck won't run out.
+    n_decks: int = 6
+    ratio_penetrate: float = 4 / 6
+    n_rounds_played: int = 0
+    reset_deck_after_round: bool = False
+    rules: RulesI = field(init=False)
 
-            
+    def __post_init__(self):
+        self.rules = RulesI(**self.rules)
+        self._init_deck()
+                
     def _init_deck(self) -> None:
         self.cards = np.array([self.n_decks * 4] * len(card_map))
         self.n_cards_played = 0 # In THIS deck.

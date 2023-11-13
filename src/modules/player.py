@@ -1,9 +1,10 @@
+from dataclasses import dataclass, field
 from typing import List, Union, Optional, Tuple
 
 from src.constants import card_values
 from src.pydantic_types import RulesI
 
-
+@dataclass
 class Player:
     """
     This module is to be used as an individual blackjack player.
@@ -13,20 +14,18 @@ class Player:
 
     We don't care for insurance bets, as they are side bets essentially, so we'll ignore completely.
     """
-    
-    def __init__(self, wager: float, rules: object={}) -> None :
-        
-        self.cards: List[List[Union[int,str]]] = [[]]
-        
-        self.base_wager = wager
-        self.wager = [wager]
-        self.rules = RulesI(**rules)
+    base_wager: float
+    wager: List[float]
+    rules: RulesI
+    cards: List[List[Union[int, str]]] = field(default_factory=lambda : [[]])
+    complete: List[bool] = field(default_factory=lambda : [False])
+    surrendered: bool = False
+    aces_split: bool = False
 
-        self.complete = [False]
-        self.surrendered = False
-        self.aces_split = False
+    def __post_init__(self):
+        self.rules = RulesI(**self.rules)
+        self.wager = [self.wager]
 
-    
     def _get_cur_hand(self) -> Optional[int]:
         return self.complete.index(False) if False in self.complete else None
     
