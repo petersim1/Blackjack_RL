@@ -14,17 +14,19 @@ class Player:
 
     We don't care for insurance bets, as they are side bets essentially, so we'll ignore completely.
     """
-    base_wager: float
     wager: List[float]
-    rules: RulesI
-    i_hand: Optional[int] = 0
-    cards: List[Cards] = field(default_factory=lambda : [[]])
-    complete: List[bool] = field(default_factory=lambda : [False])
-    surrendered: bool = False
-    aces_split: bool = False
+    rules: RulesI = field(default_factory=lambda : {})
+    base_wager: float = field(init=False)
+    i_hand: int = field(init=False, default=-1)
+    cards: List[Cards] = field(init=False, default_factory=lambda : [Cards()])
+    complete: List[bool] = field(init=False, default_factory=lambda : [False])
+    surrendered: bool = field(init=False, default=False)
+    aces_split: bool = field(init=False, default=False)
 
     def __post_init__(self):
-        self.rules = RulesI(**self.rules)
+        if not isinstance(self.rules, RulesI):
+            self.rules = RulesI(**self.rules)
+        self.base_wager = self.wager
         self.wager = [self.wager]
 
     @classmethod
@@ -34,7 +36,7 @@ class Player:
     def _decorator(f):
         def inner(self, *args, **kwargs):
             self.i_hand = self.complete.index(False) if False in self.complete else -1
-            return f(*args, **kwargs)
+            return f(self, *args, **kwargs)
         return inner
 
     def _all_complete(self) -> bool:
@@ -58,16 +60,17 @@ class Player:
     def _split(self, cards: List[Card]) -> None:
         """handles splitting of cards"""
         i_hand = self.i_hand
-        self.aces_split = (self.cards[i_hand][0].card == "A") & (self.cards[i_hand][1].card == "A")
+        self.aces_split = (self.cards[i_hand].cards[0].card == "A") & (self.cards[i_hand].cards[1].card == "A")
 
         card = self.cards[i_hand].remove_card(-1)
-        self.cards.insert(i_hand + 1, Cards(card))
+        self.cards.insert(i_hand + 1, Cards([card]))
         self.wager.insert(i_hand + 1, self.base_wager)
         self.complete.insert(i_hand + 1, False)
         
-        # Calling this fct will inherently create an updated "total" variable.
+        # Calling this add_cards() fct will inherently create an updated "total" variable.
+        # if we create the new Cards in the .insert() method, we won't have the "total" variable yet.
         self.cards[i_hand].add_cards(cards[0])
-        self.cards[i_hand+1].add_cards(cards[1])
+        self.cards[i_hand + 1].add_cards(cards[1])
 
         if self.cards[i_hand].total == 21:
             self.complete[i_hand] = True
@@ -115,7 +118,8 @@ class Player:
         return possible_moves
     
     
-    def get_num_cards_draw(self, move: str) -> int :
+    @staticmethod
+    def get_num_cards_draw(move: str) -> int :
         if move in ["hit","double"] : return 1
         if move == "split" : return 2
         return 0
@@ -145,15 +149,17 @@ class Player:
 
         house_value = house_cards.total
         house_is_blackjack = (house_value == 21) & (len(house_cards.cards) == 2)
+        n_hands = len(self.cards)
         
         text = []
         winnings = []
         if self.surrendered :
-            return [["surrender"], [-self.base_wager / 2]]
+            return ["surrender"], [-self.base_wager / 2]
         for i,cards in enumerate(self.cards) :
             val = cards.total
-            # 21 after a split is not natural blackjack. It"s just 21, even on first two cards.
-            is_blackjack = (val == 21) & (len(cards) == 2) & (len(self.cards) == 1)
+            # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
+            n_cards = len(cards.cards)
+            is_blackjack = (val == 21) & (n_cards == 2) & (n_hands == 1)
             
             if val > 21 :
                 text.append("bust")
@@ -206,8 +212,9 @@ class Player:
         return move in self.get_valid_moves()
         
 
-    def get_cards(self) -> List[Cards] :
-        return self.cards
+    @_decorator
+    def get_current_cards(self) -> Cards :
+        return self.cards[self.i_hand]
         
 
     def is_done(self) -> bool:
