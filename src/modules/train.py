@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from typing import List, Optional
 from copy import deepcopy
 
@@ -7,12 +8,12 @@ from src.helpers.runner import play_n_games
 from src.helpers.evaluation import mean_cum_rewards, compare_to_accepted
 from src.modules.game import Game
 
+@dataclass(kw_only=True)
 class EarlyStop:
-    def __init__(self, leniency):
-        self.leniency = leniency
-        self.counter = 0
-        self.min_performance = -10
-        self.stop = False
+    leniency: int
+    counter = 0
+    min_performance = -10
+    stop = False
 
     def _update(self, performance: float):
         if performance < self.min_performance:
@@ -25,39 +26,35 @@ class EarlyStop:
         if self.counter == self.leniency:
             self.stop = True
 
+@dataclass(kw_only=True)
 class Trainer(EarlyStop):
-    def __init__(
-            self,
-            early_stop: bool,
-            method: str,
-            lr: float,
-            gamma: float,
-            eps_decay: float=-1,
-            eps_min: float=-1,
-            leniency: int=10,
-            moves_blacklist: List[str]=["surrender"]
-        ):
-        EarlyStop.__init__(self, leniency)
-        self.early_stop = early_stop
-        self.method = method
-        self.q = init_q(moves_blacklist=moves_blacklist)
-        self.best_q = init_q(moves_blacklist=moves_blacklist)
+    early_stop: bool
+    method: str
+    lr: float
+    gamma: float
+    eps_decay: float=-1
+    eps_min: float=-1
+    leniency: int=10
+    moves_blacklist: List[str] = field(default_factory=lambda : ["surrender"])
+    eval: List[float] = field(default_factory=lambda : [])
+    correctness: List[float] = field(default_factory=lambda : [])
+
+    def __post_init__(self):
+        EarlyStop.__init__(self, leniency=self.leniency)
+        self.q = init_q(moves_blacklist=self.moves_blacklist)
+        self.best_q = init_q(moves_blacklist=self.moves_blacklist)
         self.accepted_q = init_q(mode="accepted")
         self.eval = []
         self.correctness = []
 
-        self.lr = lr
-        self.gamma = gamma
-        self.eps_decay = eps_decay
-        self.eps_min = eps_min
 
-    def step(self, blackjack: type[Game], wagers: List[float], eps: Optional[float]=None, reset_deck: bool=False):
+    def step(self, game: Game, wagers: List[float], eps: Optional[float]=None, reset_deck: bool=False):
 
-        blackjack.init_round(wagers)
-        blackjack.deal_init()
-        if not blackjack.house_blackjack:
+        game.init_round(wagers)
+        game.deal_init()
+        if not game.house_blackjack:
             learn_policy(
-                blackjack=blackjack,
+                game=game,
                 q=self.q,
                 epsilon=eps or -1,
                 lr=self.lr,
@@ -66,7 +63,7 @@ class Trainer(EarlyStop):
             )
 
         if reset_deck:
-            blackjack.reset_game()
+            game.reset_game()
 
     async def evaluate(self, n_rounds: int, n_games: int, game_hyperparams: object):
 

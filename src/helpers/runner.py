@@ -37,7 +37,7 @@ def select_action(state: QMovesI, policy: List[str], epsilon: float, method: str
     return move
 
 def play_round(
-        blackjack: type[Game],
+        game: Game,
         q: object,
         wagers: List[float],
         verbose: bool=False
@@ -51,12 +51,14 @@ def play_round(
         - players_winnings: (n_players x 1)
     """
 
-    blackjack.init_round(wagers)
-    blackjack.deal_init()
-    house_show = blackjack.get_house_show(show_value=True)
+    game.init_round(wagers)
+    game.deal_init()
+    house_card_show = game.get_house_show()
+    house_value = house_card_show.value if house_card_show.value > 1 else 11
 
     player: type[Player]
-    for player in blackjack.players :
+    for i in range(len(game.players)) :
+        player = game.players[i]
         if verbose:
             print("Player Cards + Moves:")
         move = ""
@@ -66,7 +68,7 @@ def play_round(
 
             can_split = "split" in policy
 
-            state = q[(player_show, house_show, useable_ace, can_split)]
+            state = q[(player_show, house_value, useable_ace, can_split)]
 
             move = select_action(
                 state=state,
@@ -77,23 +79,23 @@ def play_round(
             if verbose:
                 print(player.cards, move)
 
-            blackjack.step_player(player,move)
+            game.step_player(i,move)
 
     if (verbose) & (move not in ["surrender", "stay"]):
         print(player.cards)
 
-    blackjack.step_house()
+    game.step_house()
     if verbose:
         print("\nHouse Cards")
-        print(blackjack.house.cards)
+        print(game.house.cards[0].cards)
         print("\nResult:")
-    players_text, players_winnings = blackjack.get_results()
+    players_text, players_winnings = game.get_results()
 
     return players_text, players_winnings
 
     
 def play_n_rounds(
-        blackjack: type[Game],
+        game: Game,
         q: object,
         wagers: List[float],
         n_rounds: int
@@ -110,7 +112,7 @@ def play_n_rounds(
 
     for i in range(n_rounds):
         _, players_winnings = play_round(
-            blackjack=blackjack,
+            game=game,
             q=q,
             wagers=wagers
         )
@@ -138,9 +140,9 @@ async def play_n_games(
         - rewards: (n_games x n_players x n_rounds)
     """
     async def task():
-        blackjack = Game(**game_hyperparams)
+        game = Game(**game_hyperparams)
         return play_n_rounds(
-            blackjack=blackjack,
+            game=game,
             q=q,
             wagers=wagers,
             n_rounds=n_rounds

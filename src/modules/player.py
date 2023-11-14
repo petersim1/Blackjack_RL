@@ -1,9 +1,10 @@
-from typing import List, Union, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 
-from src.constants import card_values
+from src.modules.cards import Cards, Card
 from src.pydantic_types import RulesI
 
-
+@dataclass
 class Player:
     """
     This module is to be used as an individual blackjack player.
@@ -13,109 +14,96 @@ class Player:
 
     We don't care for insurance bets, as they are side bets essentially, so we'll ignore completely.
     """
-    
-    def __init__(self, wager: float, rules: object={}) -> None :
-        
-        self.cards: List[List[Union[int,str]]] = [[]]
-        
-        self.base_wager = wager
-        self.wager = [wager]
-        self.rules = RulesI(**rules)
+    wager: List[float]
+    rules: RulesI = field(default_factory=lambda : {})
+    base_wager: float = field(init=False)
+    i_hand: int = field(init=False, default=-1)
+    cards: List[Cards] = field(init=False, default_factory=lambda : [Cards()])
+    complete: List[bool] = field(init=False, default_factory=lambda : [False])
+    surrendered: bool = field(init=False, default=False)
+    aces_split: bool = field(init=False, default=False)
 
-        self.complete = [False]
-        self.surrendered = False
-        self.aces_split = False
+    def __post_init__(self):
+        if not isinstance(self.rules, RulesI):
+            self.rules = RulesI(**self.rules)
+        self.base_wager = self.wager
+        self.wager = [self.wager]
 
-    
-    def _get_cur_hand(self) -> Optional[int]:
-        return self.complete.index(False) if False in self.complete else None
-    
+    @classmethod
+    def from_state(cls, state):
+        pass
+
+    def _decorator(f):
+        def inner(self, *args, **kwargs):
+            self.i_hand = self.complete.index(False) if False in self.complete else -1
+            return f(self, *args, **kwargs)
+        return inner
 
     def _all_complete(self) -> bool:
-        return not self.complete.count(False)
+        return all(self.complete)
     
-
-    def _deal_card(self, card: Union[int, str]) -> None:
+    @_decorator
+    def _deal_card(self, card: Card) -> None:
         """
         Updated slightly. Mark as complete if:
         - natural blackjack
         - bust
-        - (NEW) exactly 21 (including non-natural blackjack)
+        - exactly 21 (including non-natural blackjack)
         This simplifies to marking as done if total >= 21
         """
 
-        i_hand = self._get_cur_hand()
-        self.cards[i_hand].append(card)
-        total, _ = self._get_value_cards(self.cards[i_hand])
+        self.cards[self.i_hand].add_cards(card)
 
-        # natural_blackjack = (total == 21) and (len(self.cards[i_hand]) == 2) and (len(self.cards) == 1)
-        # is_21 = total == 21
-        # bust = total > 21
+        self.complete[self.i_hand] = self.cards[self.i_hand].total >= 21
 
-        self.complete[i_hand] = total >= 21
-
-
-    def _split(self, cards: List[Union[int, str]]) -> None:
+    @_decorator
+    def _split(self, cards: List[Card]) -> None:
         """handles splitting of cards"""
-        i_hand = self._get_cur_hand()
+        i_hand = self.i_hand
+        self.aces_split = (self.cards[i_hand].cards[0].card == "A") & (self.cards[i_hand].cards[1].card == "A")
 
-        self.aces_split = (self.cards[i_hand][0] == "A") & (self.cards[i_hand][1] == "A")
-
-        card = self.cards[i_hand].pop(-1)
-        self.cards.insert(i_hand + 1, [card])
+        card = self.cards[i_hand].remove_card(-1)
+        self.cards.insert(i_hand + 1, Cards([card]))
         self.wager.insert(i_hand + 1, self.base_wager)
         self.complete.insert(i_hand + 1, False)
         
-        self.cards[i_hand].append(cards[0])
-        self.cards[i_hand+1].append(cards[1])
+        # Calling this add_cards() fct will inherently create an updated "total" variable.
+        # if we create the new Cards in the .insert() method, we won't have the "total" variable yet.
+        self.cards[i_hand].add_cards(cards[0])
+        self.cards[i_hand + 1].add_cards(cards[1])
 
-        if self._get_value_cards(self.cards[i_hand])[0] == 21:
+        if self.cards[i_hand].total == 21:
             self.complete[i_hand] = True
-
-        if self._get_value_cards(self.cards[i_hand + 1])[0] == 21:
+        if self.cards[i_hand + 1].total == 21:
             self.complete[i_hand + 1] = True
 
         if self.aces_split and (not self.rules.hit_after_split_aces) :
-            if cards[0] != "A":
+            if cards[0].card != "A":
                 self.complete[i_hand] = True
-            if cards[1] != "A":
+            if cards[1].card != "A":
                 self.complete[i_hand+1] = True
-    
 
-    def _get_value_cards(self, cards: List[Union[int, str]]) -> Tuple[int, bool] :
-        """ gets the card total, and whether there's a useable ace, for a given set of cards """
-        useable_ace = False
-        total = sum([card_values[card] for card in cards])
-        if cards.count("A") :
-            if total <= 11 :
-                total += 10
-                useable_ace = total < 21
-        return total, useable_ace
-    
-
-    def get_value(self) -> Tuple[int, bool, bool]:
+    @_decorator
+    def get_value(self) -> Tuple[int, bool]:
         """ gets the card total and whether there's a useable ace for the current hand of cards for a player """
-        i_hand = self._get_cur_hand()
-        total, useable_ace = self._get_value_cards(self.cards[i_hand])
-
-        return total, useable_ace
-        
-         
+        return self.cards[self.i_hand].total, self.cards[self.i_hand].useable_ace
+    
+    @_decorator
     def get_valid_moves(self) -> List[str] :
         possible_moves = []
-        i_hand = self._get_cur_hand()
-        if i_hand is None :
+        i_hand = self.i_hand
+        if i_hand < 0 :
             return possible_moves
         
         total, _ = self.get_value()
         
         n_hands = len(self.cards)
-        n = len(self.cards[i_hand])
+        n = len(self.cards[i_hand].cards)
         
         can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
         can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
         can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_surrender)
-        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
+        can_split = (n==2) & (self.cards[i_hand].cards[0].card == self.cards[i_hand].cards[1].card)
         can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
         if total < 21 :
@@ -130,52 +118,48 @@ class Player:
         return possible_moves
     
     
-    def get_num_cards_draw(self, move: str) -> int :
-        if move in ["hit","double"] :
-            return 1
-        if move == "split" :
-            return 2
+    @staticmethod
+    def get_num_cards_draw(move: str) -> int :
+        if move in ["hit","double"] : return 1
+        if move == "split" : return 2
         return 0
     
-    
-    def step(self, move: str, cards_give: List[Union[int, str]]=[]) -> None:
+    @_decorator
+    def step(self, move: str, cards_give: List[Card]=[]) -> None:
         assert not self._all_complete() , "Player cannot move anymore!"
         assert len(cards_give) == self.get_num_cards_draw(move) , "Must provide proper # of cards!"
         
-        i_hand = self._get_cur_hand()
         if move == "hit":
-            self._deal_card(cards_give[0]) 
+            self._deal_card(cards_give) 
         if move == "stay":
-            self.complete[i_hand] = True
+            self.complete[self.i_hand] = True
         if move == "double":
-            self.wager[i_hand] *= 2
-            self._deal_card(cards_give[0])
-            self.complete[i_hand] = True
+            self.wager[self.i_hand] *= 2
+            self._deal_card(cards_give)
+            self.complete[self.i_hand] = True
         if move == "split":
             self._split(cards_give)
         if move == "surrender":
             self.surrendered = True
-            self.complete[i_hand] = True
+            self.complete[self.i_hand] = True
 
-            
-    def get_result(
-            self,
-            house_cards: List[Union[int, str]]
-        ) -> Tuple[List[str], float] :
+    def get_result(self, house_cards: Cards) -> Tuple[List[str], float] :
 
         blackjack_payout = 1.2 if self.rules.reduced_blackjack_payout else 1.5
 
-        house_value, _ = self._get_value_cards(house_cards)
-        house_is_blackjack = (house_value == 21) & (len(house_cards) == 2)
+        house_value = house_cards.total
+        house_is_blackjack = (house_value == 21) & (len(house_cards.cards) == 2)
+        n_hands = len(self.cards)
         
         text = []
         winnings = []
         if self.surrendered :
-            return [["surrender"], [-self.base_wager / 2]]
+            return ["surrender"], [-self.base_wager / 2]
         for i,cards in enumerate(self.cards) :
-            val, _ = self._get_value_cards(cards)
-            # 21 after a split is not natural blackjack. It"s just 21, even on first two cards.
-            is_blackjack = (val == 21) & (len(cards) == 2) & (len(self.cards) == 1)
+            val = cards.total
+            # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
+            n_cards = len(cards.cards)
+            is_blackjack = (val == 21) & (n_cards == 2) & (n_hands == 1)
             
             if val > 21 :
                 text.append("bust")
@@ -223,14 +207,14 @@ class Player:
                         winnings.append(0)
     
         return text, winnings
-        
-            
+    
     def is_move_valid(self, move: str) -> bool :
         return move in self.get_valid_moves()
         
 
-    def get_cards(self) -> List[List[Union[int, str]]] :
-        return self.cards
+    @_decorator
+    def get_current_cards(self) -> Cards :
+        return self.cards[self.i_hand]
         
 
     def is_done(self) -> bool:
