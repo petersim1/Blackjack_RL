@@ -32,26 +32,27 @@ def compare_to_accepted(
     ):
     """ Simulates game play, and determines how many moves were 'optimal' according to a baseline policy """
 
-    blackjack = Game(**game_hyperparams)
+    game = Game(**game_hyperparams)
 
     correct_moves = []
 
     for _ in range(n_rounds):
 
-        blackjack.init_round([1])
-        blackjack.deal_init()
-        house_show = blackjack.get_house_show(show_value=True)
+        game.init_round([1])
+        game.deal_init()
+        house_card_show = game.get_house_show()
+        house_value = house_card_show.value if house_card_show.value > 1 else 11
 
-        for player in blackjack.players :
-            player: type[Player]
+        for i in range(len(game.players)) :
+            player = game.players[i]
             while not player.is_done() :
                 player_show, useable_ace = player.get_value()
                 policy = player.get_valid_moves()
 
                 can_split = "split" in policy
 
-                state = q[(player_show, house_show, useable_ace, can_split)]
-                accepted_state = accepted_q[(player_show, house_show, useable_ace, can_split)]
+                state = q[(player_show, house_value, useable_ace, can_split)]
+                accepted_state = accepted_q[(player_show, house_value, useable_ace, can_split)]
 
                 move = select_action(
                     state=state,
@@ -67,7 +68,7 @@ def compare_to_accepted(
                 )
                 correct_moves.append(move == accepted_move)
 
-                blackjack.step_player(player,move)
+                game.step_player(i, move)
     
     return sum(correct_moves) / len(correct_moves)
 
@@ -76,7 +77,7 @@ async def play_until_bankroll(q: object, wager: float, bankroll: float, max_roun
 
     assert max_rounds <= 1_000, "use a valid max_rounds <= 1,000"
 
-    blackjack = Game(**game_hyperparams)
+    game = Game(**game_hyperparams)
 
     n_rounds = 0
     n_rounds_profitable = 0
@@ -86,7 +87,7 @@ async def play_until_bankroll(q: object, wager: float, bankroll: float, max_roun
     while (bankroll_init > wager) and (n_rounds < max_rounds):
 
         _, rewards = play_round(
-            blackjack=blackjack,
+            game=game,
             q=q,
             wagers=[wager],
             verbose=False
@@ -144,7 +145,7 @@ async def play_games_bankrolls(
     return rounds, profitable, profits
 
 
-def assess_static_outcomes(blackjack: type[Game], q: object, n_rounds: int):
+def assess_static_outcomes(game: Game, q: object, n_rounds: int):
 
     results = {}
     busts = {}
@@ -152,20 +153,21 @@ def assess_static_outcomes(blackjack: type[Game], q: object, n_rounds: int):
 
     for _ in range(n_rounds) :
 
-        blackjack.init_round(wagers=[1])
-        blackjack.deal_init()
-        player = blackjack.players[0] # only 1 player, so i"ll just extract that specific player module.
-        house_show = blackjack.get_house_show(show_value=True)
+        game.init_round(wagers=[1])
+        game.deal_init()
+        player: Player = game.players[0] # only 1 player, so i"ll just extract that specific player module.
+        house_card_show = game.get_house_show()
+        house_value = house_card_show.value if house_card_show.value > 1 else 11
         
-        r_p = player._get_value_cards(player.cards[0])
+        r_p = player.get_value()
         soft = r_p[1]
         if r_p[0] not in player_results["soft"] :
             player_results["soft"][r_p[0]] = {"n": 0, "rewards": 0}
             player_results["hard"][r_p[0]] = {"n": 0, "rewards": 0}
 
-        if house_show not in results :
-            results[house_show] = {"n": 0, "bust": 0, "17": 0, "18": 0, "19": 0, "20": 0,"21": 0}
-        results[house_show]["n"] += 1
+        if house_value not in results :
+            results[house_value] = {"n": 0, "bust": 0, "17": 0, "18": 0, "19": 0, "20": 0,"21": 0}
+        results[house_value]["n"] += 1
 
         while not player.is_done() :
 
@@ -176,24 +178,24 @@ def assess_static_outcomes(blackjack: type[Game], q: object, n_rounds: int):
 
             can_split = "split" in policy
 
-            move = select_action(q[(player_show, house_show, useable_ace, can_split)], policy, -1, "epsilon")
+            move = select_action(q[(player_show, house_value, useable_ace, can_split)], policy, -1, "epsilon")
 
-            blackjack.step_player(player,move)
+            game.step_player(0, move)
 
 
-        blackjack.step_house()
+        game.step_house()
         
-        total, _ = blackjack.house._get_value_cards(blackjack.house.cards[0])
+        total, _ = game.house.get_value()
 
         if total > 21 :
-            results[house_show]["bust"] += 1
+            results[house_value]["bust"] += 1
             if total not in busts :
                 busts[total] = 0
             busts[total] += 1
         if total <= 21 :
-            results[house_show][str(total)] += 1
+            results[house_value][str(total)] += 1
             
-        _, r_player = player.get_result(blackjack.house.cards[0])
+        _, r_player = player.get_result(game.house.cards[0])
         player_results["soft" if soft else "hard"][r_p[0]]["n"] += 1
         player_results["soft" if soft else "hard"][r_p[0]]["rewards"] += sum(r_player)
 

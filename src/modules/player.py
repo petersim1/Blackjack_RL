@@ -98,12 +98,12 @@ class Player:
         total, _ = self.get_value()
         
         n_hands = len(self.cards)
-        n = len(self.cards[i_hand])
+        n = len(self.cards[i_hand].cards)
         
         can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
         can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
         can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_surrender)
-        can_split = (n==2) & (self.cards[i_hand][0] == self.cards[i_hand][1])
+        can_split = (n==2) & (self.cards[i_hand].cards[0].card == self.cards[i_hand].cards[1].card)
         can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
                 
         if total < 21 :

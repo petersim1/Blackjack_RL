@@ -7,8 +7,8 @@ from src.helpers.runner import select_action
 
 
 def gen_episode(
-        blackjack: type[Game],
-        player: type[Player],
+        game: Game,
+        player_ind: int,
         q: object,
         epsilon: float,
         method: str
@@ -24,24 +24,26 @@ def gen_episode(
     s_a_pairs = [[]]
     conditional_action_spaces = [[]]
     
-    house_show = blackjack.get_house_show(show_value=True)
+    player = game.players[player_ind]
+    house_card_show = game.get_house_show()
+    house_value = house_card_show.value if house_card_show.value > 1 else 11
 
     while not player.is_done() :
 
         player_total, useable_ace = player.get_value()
-        nHand = player._get_cur_hand() # need this for isolating "split" moves.
+        nHand = player.i_hand # need this for isolating "split" moves. Can access since decorator to update i_hand is called in get_value() method.
 
         policy = player.get_valid_moves()
         conditional_action_spaces[nHand].append((policy))
 
         can_split = "split" in policy
 
-        q_dict = q[(player_total, house_show, useable_ace, can_split)]
+        q_dict = q[(player_total, house_value, useable_ace, can_split)]
         move = select_action(state=q_dict, policy=policy, epsilon=epsilon, method=method)
 
         s_a_pair = StateActionPair(
             player_show=player_total,
-            house_show=house_show,
+            house_show=house_value,
             useable_ace=useable_ace,
             can_split=can_split,
             move=move
@@ -52,12 +54,12 @@ def gen_episode(
             s_a_pairs.append(s_a_pairs[nHand].copy())
             conditional_action_spaces.append(conditional_action_spaces[nHand].copy())
 
-        blackjack.step_player(player, move)
+        game.step_player(player_ind, move)
         
     return s_a_pairs, conditional_action_spaces
 
 def learn_policy(
-        blackjack: type[Game],
+        game: type[Game],
         q: object,
         epsilon: float,
         gamma: float,
@@ -85,10 +87,10 @@ def learn_policy(
     s_a_pairs: List[List[List[StateActionPair]]] = []
     conditional_action_space: List[ConditionalActionSpace] = []
 
-    for player in blackjack.players:
+    for ind in range(len(game.players)):
         s_a, action_space = gen_episode(
-            blackjack=blackjack,
-            player=player,
+            game=game,
+            player_ind=ind,
             q=q,
             epsilon=epsilon,
             method=method
@@ -96,12 +98,12 @@ def learn_policy(
         s_a_pairs.append(s_a)
         conditional_action_space.append(action_space)
 
-    blackjack.step_house()
+    game.step_house()
     # _, player_winnings = blackjack.get_results()
 
-    player: type[Player]
-    for i,player in enumerate(blackjack.players):
-        _, player_winnings = player.get_result(blackjack.house.cards[0])
+    player: Player
+    for i,player in enumerate(game.players):
+        _, player_winnings = player.get_result(game.house.cards[0])
         j = 0 # move number in state-action pair
         hand = 0 # hand number (to account for splits)
         while (hand < len(s_a_pairs[i])):

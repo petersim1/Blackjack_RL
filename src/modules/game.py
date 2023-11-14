@@ -129,9 +129,9 @@ class Game :
         
     def get_house_show(self) -> Card :
         
-        assert len(self.house.cards[0]) , "House has not been dealt yet"
+        assert len(self.house.cards[0].cards) , "House has not been dealt yet"
 
-        return self.house.cards[0][0]            
+        return self.house.cards[0].cards[0]            
 
 
     @_decorator

@@ -40,7 +40,7 @@ class Trainer(EarlyStop):
     correctness: List[float] = field(default_factory=lambda : [])
 
     def __post_init__(self):
-        EarlyStop.__init__(self, self.leniency)
+        EarlyStop.__init__(self, leniency=self.leniency)
         self.q = init_q(moves_blacklist=self.moves_blacklist)
         self.best_q = init_q(moves_blacklist=self.moves_blacklist)
         self.accepted_q = init_q(mode="accepted")
@@ -48,13 +48,13 @@ class Trainer(EarlyStop):
         self.correctness = []
 
 
-    def step(self, blackjack: Game, wagers: List[float], eps: Optional[float]=None, reset_deck: bool=False):
+    def step(self, game: Game, wagers: List[float], eps: Optional[float]=None, reset_deck: bool=False):
 
-        blackjack.init_round(wagers)
-        blackjack.deal_init()
-        if not blackjack.house_blackjack:
+        game.init_round(wagers)
+        game.deal_init()
+        if not game.house_blackjack:
             learn_policy(
-                blackjack=blackjack,
+                game=game,
                 q=self.q,
                 epsilon=eps or -1,
                 lr=self.lr,
@@ -63,7 +63,7 @@ class Trainer(EarlyStop):
             )
 
         if reset_deck:
-            blackjack.reset_game()
+            game.reset_game()
 
     async def evaluate(self, n_rounds: int, n_games: int, game_hyperparams: object):
 
