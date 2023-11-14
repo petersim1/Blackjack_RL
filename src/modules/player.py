@@ -155,10 +155,10 @@ class Player:
         winnings = []
         if self.surrendered :
             return ["surrender"], [-self.base_wager / 2]
-        for i,cards in enumerate(self.cards) :
-            val = cards.total
+        for i,hand in enumerate(self.cards) :
+            val = hand.total
             # 21 after a split is not natural blackjack. It's just 21, even on first two cards.
-            n_cards = len(cards.cards)
+            n_cards = len(hand.cards)
             is_blackjack = (val == 21) & (n_cards == 2) & (n_hands == 1)
             
             if val > 21 :

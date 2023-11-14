@@ -30,26 +30,29 @@ class EarlyStop:
 class Trainer(EarlyStop):
     early_stop: bool
     method: str
-    lr: float
     gamma: float
-    eps_decay: float=-1
-    eps_min: float=-1
     leniency: int=10
     moves_blacklist: List[str] = field(default_factory=lambda : ["surrender"])
-    eval: List[float] = field(default_factory=lambda : [])
-    correctness: List[float] = field(default_factory=lambda : [])
 
     def __post_init__(self):
         EarlyStop.__init__(self, leniency=self.leniency)
         self.q = init_q(moves_blacklist=self.moves_blacklist)
         self.best_q = init_q(moves_blacklist=self.moves_blacklist)
         self.accepted_q = init_q(mode="accepted")
-        self.eval = []
-        self.correctness = []
 
 
-    def step(self, game: Game, wagers: List[float], eps: Optional[float]=None, reset_deck: bool=False):
-
+    def step(
+            self,
+            game: Game,
+            wagers: List[float],
+            lr: float,
+            eps: Optional[float]=None,
+            reset_deck: bool=False
+        ) -> None:
+        '''
+        To allow for decayed learning rate and decayed epsilon,
+        I pass lr and eps as variables here, where decay is managed outside of the module.
+        '''
         game.init_round(wagers)
         game.deal_init()
         if not game.house_blackjack:
@@ -57,7 +60,7 @@ class Trainer(EarlyStop):
                 game=game,
                 q=self.q,
                 epsilon=eps or -1,
-                lr=self.lr,
+                lr=lr,
                 gamma=self.gamma,
                 method=self.method
             )
@@ -75,7 +78,6 @@ class Trainer(EarlyStop):
             game_hyperparams=game_hyperparams
         )
         mean_reward = mean_cum_rewards(rewards)[0]
-        self.eval.append(mean_reward)
 
         percent_correct_baseline = compare_to_accepted(
             q=self.q,
@@ -83,7 +85,6 @@ class Trainer(EarlyStop):
             game_hyperparams=game_hyperparams,
             n_rounds=n_rounds
         )
-        self.correctness.append(percent_correct_baseline)
 
         if self.early_stop:
             self._update(mean_reward)

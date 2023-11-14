@@ -51,8 +51,8 @@ def gen_episode(
         s_a_pairs[nHand].append(s_a_pair)
 
         if move == "split" :
-            s_a_pairs.append(s_a_pairs[nHand].copy())
-            conditional_action_spaces.append(conditional_action_spaces[nHand].copy())
+            s_a_pairs.append([])
+            conditional_action_spaces.append([])
 
         game.step_player(player_ind, move)
         
@@ -100,10 +100,8 @@ def learn_policy(
 
     game.step_house()
     # _, player_winnings = blackjack.get_results()
-
-    player: Player
-    for i,player in enumerate(game.players):
-        _, player_winnings = player.get_result(game.house.cards[0])
+    results = game.get_results()
+    for i,(_, player_winnings) in enumerate(zip(*results)):
         j = 0 # move number in state-action pair
         hand = 0 # hand number (to account for splits)
         while (hand < len(s_a_pairs[i])):
@@ -116,11 +114,15 @@ def learn_policy(
                     s_a_pair.useable_ace,
                     s_a_pair.can_split
                 )]
-
-                # r = player_winnings[hand]
-                r = sum(player_winnings)
+                # This is an important component, as it dicates how to aggregate
+                # rewards for when a split occurred.
+                if s_a_pair.move == "split":
+                    r = sum(player_winnings[hand:(hand+2)]) / 2
+                else:
+                    r = player_winnings[hand]
                 max_q_p = 0
                 if (j+1) < len(s_a_pairs[i][hand]):
+                    # This condition basically says, did you hit or split (not aces)?
                     s_a_pair_p = s_a_pairs[i][hand][j+1]
                     action_space = conditional_action_space[i][hand][j+1]
 
@@ -132,7 +134,12 @@ def learn_policy(
                     )]
 
                     max_q_p = max([v for k,v in q_dict.items() if k in action_space])
-                    r = 0
+                    # POTENTIALLY REMOVE THIS IF STATEMENT!!
+                    if s_a_pair.move != "split":
+                    # for splits, this condition is always met unless it's splitting Aces.
+                    # we completely lose information that a split occurred.
+                    # I can tell it to retain a reward based on final outcome, if split.
+                        r = 0
                 old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr*(r + gamma * max_q_p - old_q[s_a_pair.move])
 
             if j < len(s_a_pairs[i][hand])-1:
