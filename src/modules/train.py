@@ -8,7 +8,7 @@ from src.helpers.runner import play_n_games
 from src.helpers.evaluation import mean_cum_rewards, compare_to_accepted
 from src.modules.game import Game
 
-@dataclass
+@dataclass(kw_only=True)
 class EarlyStop:
     leniency: int
     counter = 0
@@ -26,7 +26,7 @@ class EarlyStop:
         if self.counter == self.leniency:
             self.stop = True
 
-@dataclass
+@dataclass(kw_only=True)
 class Trainer(EarlyStop):
     early_stop: bool
     method: str
@@ -36,8 +36,8 @@ class Trainer(EarlyStop):
     eps_min: float=-1
     leniency: int=10
     moves_blacklist: List[str] = field(default_factory=lambda : ["surrender"])
-    eval = List[float] = field(default_factory=lambda : [])
-    correctness = List[float] = field(default_factory=lambda : [])
+    eval: List[float] = field(default_factory=lambda : [])
+    correctness: List[float] = field(default_factory=lambda : [])
 
     def __post_init__(self):
         EarlyStop.__init__(self, self.leniency)
