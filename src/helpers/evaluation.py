@@ -49,10 +49,8 @@ def compare_to_accepted(
                 player_show, useable_ace = player.get_value()
                 policy = player.get_valid_moves()
 
-                can_split = "split" in policy
-
-                state = q[(player_show, house_value, useable_ace, can_split)]
-                accepted_state = accepted_q[(player_show, house_value, useable_ace, can_split)]
+                state = q[(player_show, house_value, useable_ace)]
+                accepted_state = accepted_q[(player_show, house_value, useable_ace)]
 
                 move = select_action(
                     state=state,
@@ -176,9 +174,7 @@ def assess_static_outcomes(game: Game, q: object, n_rounds: int):
             policy = player.get_valid_moves()
             policy = [p for p in policy if p!="insurance"]
 
-            can_split = "split" in policy
-
-            move = select_action(q[(player_show, house_value, useable_ace, can_split)], policy, -1, "epsilon")
+            move = select_action(q[(player_show, house_value, useable_ace)], policy, -1, "epsilon")
 
             game.step_player(0, move)
 

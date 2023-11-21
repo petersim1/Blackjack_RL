@@ -37,16 +37,13 @@ def gen_episode(
         policy = player.get_valid_moves()
         conditional_action_spaces[nHand].append((policy))
 
-        can_split = "split" in policy
-
-        q_dict = q[(player_total, house_value, useable_ace, can_split)]
+        q_dict = q[(player_total, house_value, useable_ace)]
         move = select_action(state=q_dict, policy=policy, epsilon=epsilon, method=method)
 
         s_a_pair = StateActionPair(
             player_show=player_total,
             house_show=house_value,
             useable_ace=useable_ace,
-            can_split=can_split,
             move=move
         )
         s_a_pairs[nHand].append(s_a_pair)
@@ -101,6 +98,7 @@ def learn_policy(
         s_a_pairs.append(s_a)
         conditional_action_space.append(action_space)
 
+    game.step_house(only_reveal_card=True)
     while not game.house_done():
         game.step_house()
 
@@ -116,7 +114,6 @@ def learn_policy(
                     s_a_pair.player_show,
                     s_a_pair.house_show,
                     s_a_pair.useable_ace,
-                    s_a_pair.can_split
                 )]
                 # This is an important component, as it dicates how to aggregate
                 # rewards for when a split occurred.
@@ -134,7 +131,6 @@ def learn_policy(
                         s_a_pair_p.player_show,
                         s_a_pair_p.house_show,
                         s_a_pair_p.useable_ace,
-                        s_a_pair_p.can_split,
                     )]
 
                     max_q_p = max([v for k,v in q_dict.items() if k in action_space])
