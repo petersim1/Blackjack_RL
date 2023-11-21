@@ -24,18 +24,23 @@ class Card:
 @dataclass
 class Cards:
     cards: List[Card] = field(default_factory=list)
+    requires_total: bool = True
+    total: int = field(init=False)
+    useable_ace: bool = field(init=False)
 
     @classmethod
     def init_from_deck(cls, n):
+        # When initialized from deck, it assumes we don't
+        # care about the total or useable_ace.
         cards = cls.generate_deck(n)
-        return cls(cards)
+        return cls(cards, requires_total=False)
 
     @staticmethod
     def generate_deck(n) -> List[Card]:
         cards = []
         for suit in SuitEnum:
             for c in [2,3,4,5,6,7,8,9,10,"J","Q","K","A"]:
-                cards.extend([Card(suit, c)]*n)
+                cards.extend([Card(suit, c)] * n)
         return cards
     
     def _update_value(self) -> None:
@@ -47,14 +52,15 @@ class Cards:
             aces += int(card.card == "A")
         if aces:
             if summed <= 11:
+                self.useable_ace = True
                 summed += 10
-                self.useable_ace = summed < 21
         self.total = summed
     
     def _decorator(f):
         def inner(self, *args, **kwargs):
             res = f(self, *args, **kwargs)
-            self._update_value()
+            if self.requires_total:
+                self._update_value()
             return res
         return inner
     
