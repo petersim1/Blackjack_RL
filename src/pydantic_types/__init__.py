@@ -24,6 +24,7 @@ class RulesI(BaseModel):
     hit_after_split_aces=False
     reduced_blackjack_payout=False
     allow_surrender=True
+    split_any_ten=True
 
 QMovesI = Dict[str, float]
 
