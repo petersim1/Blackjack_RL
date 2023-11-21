@@ -55,15 +55,14 @@ class Trainer(EarlyStop):
         '''
         game.init_round(wagers)
         game.deal_init()
-        if not game.house_blackjack:
-            learn_policy(
-                game=game,
-                q=self.q,
-                epsilon=eps or -1,
-                lr=lr,
-                gamma=self.gamma,
-                method=self.method
-            )
+        learn_policy(
+            game=game,
+            q=self.q,
+            epsilon=eps or -1,
+            lr=lr,
+            gamma=self.gamma,
+            method=self.method
+        )
 
         if reset_deck:
             game.reset_game()

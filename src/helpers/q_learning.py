@@ -26,6 +26,7 @@ def gen_episode(
     
     player = game.players[player_ind]
     house_card_show = game.get_house_show()
+    # casts it to an integer -> Ace == 11 here.
     house_value = house_card_show.value if house_card_show.value > 1 else 11
 
     while not player.is_done() :
@@ -76,8 +77,10 @@ def learn_policy(
 
     Some additional logic is required to account for splits.
 
-    In blackjack, we don't care about how many moves are performed. We only care about final outcome.
-    Rewards for non-terminal states receive a reward of 0.
+    Learning step is skipped if Player or House has blackjack,
+    as round would have immediately ended and no state-action pairs would exist
+
+    Rewards for non-terminal states receive a reward of 0, except for splits.
 
     If we are in a terminal state, there is no s`, so we define it as 0.
     """
@@ -98,10 +101,11 @@ def learn_policy(
         s_a_pairs.append(s_a)
         conditional_action_space.append(action_space)
 
-    game.step_house()
-    # _, player_winnings = blackjack.get_results()
-    results = game.get_results()
-    for i,(_, player_winnings) in enumerate(zip(*results)):
+    while not game.house_done():
+        game.step_house()
+
+    _, results = game.get_results()
+    for i,player_winnings in enumerate(results):
         j = 0 # move number in state-action pair
         hand = 0 # hand number (to account for splits)
         while (hand < len(s_a_pairs[i])):
