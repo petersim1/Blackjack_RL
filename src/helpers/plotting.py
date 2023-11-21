@@ -59,98 +59,55 @@ def plot_mesh(axis, data, ranges, ticks=None):
         axis.set(yticks=ranges[0], yticklabels=ticks)
 
 
-def generate_mesh(q: object) -> np.ndarray:
-    value_det = np.zeros((3, 21+1, 11+1))
+def extract_best(values: dict, return_type: str="string"):
+    moves = ["hit", "stay", "double", "surrender"]
 
-    for (player, house, useable_ace, can_split), vals in q.items():
-        moves = ["stay", "hit", "double"]
-        if can_split:
-            moves.append("split")
+    dict_moves = {k:v for k,v in values.items() if k in moves}
 
-        dict_moves = {k:v for k,v in vals.items() if k in moves}
-        if not can_split:
-            value_det[int(useable_ace), player, house] = max(dict_moves.values())
-        else:
-            player_ind = int(player / 2)
-            if useable_ace:
-                if player == 12:
-                    player_ind = 11
-                else:
-                    continue
-            value_det[2, player_ind, house] =  max(dict_moves.values())
-
-    return value_det
-
-def hard_totals(q: dict):
-    # assume no useable ace, no ability to split
-    fill = np.empty((21 + 1, 11 + 1), dtype="O")
-
-    for (player, house, useable_ace), vals in q.items():
-        if useable_ace: continue
-        vals: dict
-        # first assume we can double / surrender.
-        moves = ["hit", "stay", "double", "surrender"]
-
-        dict_moves = {k:v for k,v in vals.items() if k in moves}
-        max_val = max(dict_moves,key=dict_moves.get)
-
-        if max_val in ["double", "surrender"]:
-            moves = ["hit", "stay"]
-            dict_moves = {k:v for k,v in vals.items() if k in moves}
-            max_val = max_val[:2].title() + "/" + max(dict_moves,key=dict_moves .get)[:2].title()
-        else:
-            max_val = max_val[:2].title()
-        
-        fill[player, house] = max_val
+    if return_type == "value":
+        return max(dict_moves.values())
     
-    return fill
+    max_val = max(dict_moves,key=dict_moves.get)
+    if max_val in ["double", "surrender"]:
+        moves = ["hit", "stay"]
+        dict_moves = {k:v for k,v in values.items() if k in moves}
+        max_val = max_val[:2].title() + "/" + max(dict_moves, key=dict_moves.get)[:2].title()
+    else:
+        max_val = max_val[:2].title()
 
-def soft_totals(q: dict):
+    return max_val
 
-    fill = np.empty((21 + 1, 11 + 1), dtype="O")
+def generate_grid(q: dict, return_type: str="string") -> np.ndarray:
+    """
+    takes a Q dict and a return_type
+    if return_type == "string":
+        return a str detailing the best move.
+        if best move is double / surrender (when you can't split), also
+        append best move for instance when you can't actually double / surrender
+    if return_type == "value"
+        simply return the maximum q value
+    do this for each of hard total, soft total, can split.
+    """
+    assert return_type in ["string", "value"], "invalid return_type"
+    if return_type == "string":
+        fill = np.empty((3, 21 + 1, 11 + 1), dtype="O")
+    else:
+        fill = np.full((3, 21 + 1, 11 + 1), np.nan)
 
     for (player, house, useable_ace), vals in q.items():
-        if not useable_ace: continue
-        if player == 12: continue # specifical designation for (A,A)
         vals: dict
-        moves = ["hit", "stay", "double", "surrender"]
-
-        dict_moves = {k:v for k,v in vals.items() if k in moves}
-        max_val = max(dict_moves,key=dict_moves.get)
-
-        if max_val in ["double", "surrender"]:
-            moves = ["hit", "stay"]
-            dict_moves = {k:v for k,v in vals.items() if k in moves}
-            max_val = max_val[:2].title() + "/" + max(dict_moves,key=dict_moves .get)[:2].title()
-        else:
-            max_val = max_val[:2].title()
-        
-        fill[player, house] = max_val
-    return fill
-
-def splits(q: dict):
-    
-    fill = np.empty((21 + 1, 11 + 1), dtype="O")
-
-    for (player, house, useable_ace), vals in q.items():
         can_split = not player % 2
-        if not can_split: continue
-        if (player != 12) and useable_ace: continue # specific designation for (A,A) / (6,6)
-        vals: dict
 
-        max_val = max(vals, key=vals.get)
-        # val = "Y" if max_val == "split" else "N"
-
-        player_ind = 11 if useable_ace else int(player / 2)
-        fill[player_ind, house] = max_val[:2].title()
-    return fill
-
-def generate_grid(q: dict) -> Tuple[np.ndarray, np.ndarray]:
-
-    fill = np.empty((3, 21+1, 11+1), dtype="O")
-
-    fill[0] = hard_totals(q)
-    fill[1] = soft_totals(q)
-    fill[2] = splits(q)
-
+        if not useable_ace:
+            fill[0, player, house] = extract_best(vals, return_type=return_type)
+        if useable_ace and (player != 12):
+            fill[1, player, house] = extract_best(vals, return_type=return_type)
+        if can_split and ((not useable_ace) or (player == 12)):
+            if return_type == "string":
+                max_val = max(vals, key=vals.get)[:2].title()
+            else:
+                max_val = max(vals.values())
+            player_ind = 11 if useable_ace else int(player / 2)
+            fill[2, player_ind, house] = max_val
+    
     return fill
