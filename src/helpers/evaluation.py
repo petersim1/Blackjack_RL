@@ -23,10 +23,56 @@ def median_cum_rewards(rewards_games: List[List[List[float]]]) -> np.ndarray:
     cummed: np.ndarray = cummulative_rewards_per_round(rewards_games)
     return np.median(cummed, axis=0)
 
+def q_value_assessment(
+        q: dict,
+        game_hyperparams: object,
+        n_rounds: int
+    ):
+    """assessment of average maximum q value, for convergence"""
+
+    game = Game(**game_hyperparams)
+
+    max_q_values = []
+
+    for _ in range(n_rounds):
+
+        game.init_round([1])
+        game.deal_init()
+        house_card_show = game.get_house_show()
+        house_value = house_card_show.value if house_card_show.value > 1 else 11
+
+        for i in range(len(game.players)) :
+            player = game.players[i]
+            while not player.is_done() :
+                player_show, useable_ace = player.get_value()
+                policy = player.get_valid_moves()
+
+                state = q[(player_show, house_value, useable_ace)]
+
+                # Add the maximum possible q value given the policy.
+                q_dict = {k:v for k,v in state.items() if k in policy}
+                max_q_values.append(max(q_dict.values()))
+
+
+                move = select_action(
+                    state=state,
+                    policy=policy,
+                    epsilon=-1,
+                    method="epsilon"
+                )
+
+                game.step_player(i, move)
+
+        game.step_house(only_reveal_card=True)
+        while not game.house_done():
+            game.step_house()
+    
+    return sum(max_q_values) / len(max_q_values)
+
 
 def compare_to_accepted(
-        q: object,
-        accepted_q: object,
+        q: dict,
+        accepted_q: dict,
         game_hyperparams: object,
         n_rounds: int
     ):
@@ -49,10 +95,8 @@ def compare_to_accepted(
                 player_show, useable_ace = player.get_value()
                 policy = player.get_valid_moves()
 
-                can_split = "split" in policy
-
-                state = q[(player_show, house_value, useable_ace, can_split)]
-                accepted_state = accepted_q[(player_show, house_value, useable_ace, can_split)]
+                state = q[(player_show, house_value, useable_ace)]
+                accepted_state = accepted_q[(player_show, house_value, useable_ace)]
 
                 move = select_action(
                     state=state,
@@ -176,14 +220,14 @@ def assess_static_outcomes(game: Game, q: object, n_rounds: int):
             policy = player.get_valid_moves()
             policy = [p for p in policy if p!="insurance"]
 
-            can_split = "split" in policy
-
-            move = select_action(q[(player_show, house_value, useable_ace, can_split)], policy, -1, "epsilon")
+            move = select_action(q[(player_show, house_value, useable_ace)], policy, -1, "epsilon")
 
             game.step_player(0, move)
 
 
-        game.step_house()
+        game.step_house(only_reveal_card=True)
+        while not game.house_done():
+            game.step_house()
         
         total, _ = game.house.get_value()
 

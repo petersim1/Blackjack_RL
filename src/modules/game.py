@@ -30,6 +30,7 @@ class Game :
     ratio_penetrate: float = 4 / 6
     n_rounds_played: int = field(init=False, default=0)
     reset_deck_after_round: bool = field(init=False, default=False)
+    cut_card: int = field(init=False)
     shoe: Cards = field(init=False)
     players: List[Player] = field(init=False)
     house: Player = field(init=False)
@@ -40,6 +41,7 @@ class Game :
     def __post_init__(self):
         if not isinstance(self.rules, RulesI):
             self.rules = RulesI(**self.rules)
+        self.cut_card = int(self.n_decks * 52 * (1 - self.ratio_penetrate))
         self._init_deck()
                 
     def _init_deck(self) -> None:
@@ -54,9 +56,7 @@ class Game :
             
     def _select_card(self) -> Card:
         card = self.shoe.select_card(deplete=self.shrink_deck)
-        
-
-        stop_card_met = len(self.shoe.cards) <= (int(self.n_decks * 52 * self.ratio_penetrate))
+        stop_card_met = len(self.shoe.cards) <= self.cut_card
 
         if stop_card_met and self.shrink_deck:
             self.reset_deck_after_round = True
@@ -125,7 +125,12 @@ class Game :
             self.house._deal_card(card)
         
         if self.house.cards[0].total == 21 :
-            self.house_blackjack = True # If house has blackjack, don't accept moves (except insurance + surrender)
+            # The flow is -> dealer shows a card, if it's an Ace or 10, then ask players if they want insurance.
+            # Dealer will then check the card, if it's blackjack, the round is over. If it's not blackjack, surrender is allowed.
+            # Since I'm doing this without insurance, it isn't relevant. End hand immediately if blackjack.
+            self.house_blackjack = True
+            for player in self.players:
+                player.force_completion()
         
     def get_house_show(self) -> Card :
         
@@ -135,17 +140,33 @@ class Game :
 
 
     @_decorator
-    def step_house(self) -> None :
+    def step_house(self, only_reveal_card: bool=False) -> None :
+        """
+        can safely call this even if house is done.
+        """
+        # Originally I was completing a full hand here with a "while" loop.
+        # I think explicitly calling this until completion leads to 
+        # a better UX. Also, we get count updates, and house total updates
+        # throughout each card draw, versus only at the end of the house sequence.
 
+        self.house_played = True
+        if only_reveal_card: return
+
+        if self.house_done(): return
+        card = self._select_card()
+        self.house._deal_card(card)
+    
+    def house_done(self):
         house = self.house.cards[0].total
         useable_ace = self.house.cards[0].useable_ace
-        
-        while (house < 17) or ((house == 17) and useable_ace and self.rules.dealer_hit_soft17) :
-            card = self._select_card()
-            self.house._deal_card(card)
-            house = self.house.cards[0].total
-            useable_ace = self.house.cards[0].useable_ace
-        self.house_played = True
+
+        if house > 17:
+            return True
+        if ((house == 17) and not useable_ace):
+            return True
+        if ((house == 17) and useable_ace and (not self.rules.dealer_hit_soft17)):
+            return True
+        return False
             
 
     @_decorator

@@ -5,7 +5,7 @@ from copy import deepcopy
 from src.helpers.create_q_dict import init_q
 from src.helpers.q_learning import learn_policy
 from src.helpers.runner import play_n_games
-from src.helpers.evaluation import mean_cum_rewards, compare_to_accepted
+from src.helpers.evaluation import mean_cum_rewards, compare_to_accepted, q_value_assessment
 from src.modules.game import Game
 
 @dataclass(kw_only=True)
@@ -32,7 +32,7 @@ class Trainer(EarlyStop):
     method: str
     gamma: float
     leniency: int=10
-    moves_blacklist: List[str] = field(default_factory=lambda : ["surrender"])
+    moves_blacklist: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         EarlyStop.__init__(self, leniency=self.leniency)
@@ -55,15 +55,14 @@ class Trainer(EarlyStop):
         '''
         game.init_round(wagers)
         game.deal_init()
-        if not game.house_blackjack:
-            learn_policy(
-                game=game,
-                q=self.q,
-                epsilon=eps or -1,
-                lr=lr,
-                gamma=self.gamma,
-                method=self.method
-            )
+        learn_policy(
+            game=game,
+            q=self.q,
+            epsilon=eps or -1,
+            lr=lr,
+            gamma=self.gamma,
+            method=self.method
+        )
 
         if reset_deck:
             game.reset_game()
@@ -86,12 +85,18 @@ class Trainer(EarlyStop):
             n_rounds=n_rounds
         )
 
+        avg_max_q = q_value_assessment(
+            q=self.q,
+            game_hyperparams=game_hyperparams,
+            n_rounds=n_rounds
+        )
+
         if self.early_stop:
             self._update(mean_reward)
             if not self.counter:
                 self.best_q = deepcopy(self.q)
 
-        return mean_reward, percent_correct_baseline
+        return mean_reward, percent_correct_baseline, avg_max_q
 
     def get_q(self, backtrack: bool=False):
         if self.early_stop and backtrack:

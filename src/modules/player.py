@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from src.modules.cards import Cards, Card
 from src.pydantic_types import RulesI
@@ -35,6 +35,8 @@ class Player:
 
     def _decorator(f):
         def inner(self, *args, **kwargs):
+            # will fetch last hand, but can also add logic that checks if it's negative
+            # to denote a hand as complete... up to the user.
             self.i_hand = self.complete.index(False) if False in self.complete else -1
             return f(self, *args, **kwargs)
         return inner
@@ -92,7 +94,7 @@ class Player:
     def get_valid_moves(self) -> List[str] :
         possible_moves = []
         i_hand = self.i_hand
-        if i_hand < 0 :
+        if (i_hand < 0): # catches when the player is done. Don't need to additional check .is_done()
             return possible_moves
         
         total, _ = self.get_value()
@@ -100,11 +102,11 @@ class Player:
         n_hands = len(self.cards)
         n = len(self.cards[i_hand].cards)
         
-        can_hit = (not self.aces_split) | self.rules.hit_after_split_aces
-        can_stay = (not self.aces_split) | self.rules.hit_after_split_aces
-        can_surrender = (n==2) & (n_hands==1) & (self.rules.allow_surrender)
-        can_split = (n==2) & (self.cards[i_hand].cards[0].card == self.cards[i_hand].cards[1].card)
-        can_double = (n==2) & (((n_hands > 1) & self.rules.double_after_split) | (n_hands == 1)) & can_hit
+        can_hit = (not self.aces_split) or self.rules.hit_after_split_aces
+        can_stay = (not self.aces_split) or self.rules.hit_after_split_aces
+        can_surrender = (n==2) and (n_hands==1) and (self.rules.allow_surrender)
+        can_split = (n==2) and ((self.cards[i_hand].cards[0].card == self.cards[i_hand].cards[1].card) or ((self.cards[i_hand].cards[0].value == self.cards[i_hand].cards[1].value) and self.rules.split_any_ten))
+        can_double = (n==2) and (((n_hands > 1) and self.rules.double_after_split) or (n_hands == 1)) and can_hit
                 
         if total < 21 :
             if can_stay: possible_moves.append("stay")
@@ -142,6 +144,13 @@ class Player:
         if move == "surrender":
             self.surrendered = True
             self.complete[self.i_hand] = True
+
+    def force_completion(self):
+        """
+        beneficial when the house draws a blackjack, can force the player hand to end
+        without needing outside logical checks.
+        """
+        self.complete = [True]*len(self.cards)
 
     def get_result(self, house_cards: Cards) -> Tuple[List[str], float] :
 

@@ -66,9 +66,7 @@ def play_round(
             player_show, useable_ace = player.get_value()
             policy = player.get_valid_moves()
 
-            can_split = "split" in policy
-
-            state = q[(player_show, house_value, useable_ace, can_split)]
+            state = q[(player_show, house_value, useable_ace)]
 
             move = select_action(
                 state=state,
@@ -77,17 +75,20 @@ def play_round(
                 method="epsilon"
             )
             if verbose:
-                print(player.cards, move)
+                print([cards.card for cards in player.cards[0].cards], move)
 
             game.step_player(i,move)
 
     if (verbose) & (move not in ["surrender", "stay"]):
-        print(player.cards)
+        print([cards.card for cards in player.cards[0].cards])
 
-    game.step_house()
+    game.step_house(only_reveal_card=True)
+    while not game.house_done():
+        game.step_house()
+        
     if verbose:
         print("\nHouse Cards")
-        print(game.house.cards[0].cards)
+        print([cards.card for cards in game.house.cards[0].cards])
         print("\nResult:")
     players_text, players_winnings = game.get_results()
 

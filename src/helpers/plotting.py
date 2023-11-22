@@ -2,23 +2,32 @@ from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_loss(array: List[float], every: int, label: str, include_max: bool=False) -> None:
+def plot_learning_curve(
+        array: List[float],
+        every: int,
+        label: str,
+        include_avg: bool=True,
+        include_max: bool=False,
+        **kwargs,
+    ) -> None:
     plt.figure(figsize=(15,4))
     plt.plot(
         np.arange(0,len(array))*every,
         array,
         label=label
     )
-    plt.plot(
-        np.arange(0,len(array))*every,
-        np.cumsum(array) / np.arange(1,len(array)+1),
-        label="Rolling Avg."
-    )
+    if include_avg:
+        plt.plot(
+            np.arange(0,len(array))*every,
+            np.cumsum(array) / np.arange(1,len(array)+1),
+            label="Rolling Avg."
+        )
     if include_max:
         plt.vlines(x=np.argmax(array)*every,ymin=min(array),ymax=max(array),color="k")
-    plt.title("Q-Learning")
-    plt.ylabel("Avg Reward at Evaluation")
-    plt.legend()
+    plt.title(kwargs["title"])
+    plt.ylabel(kwargs["ylabel"])
+    if include_avg:
+        plt.legend()
     plt.show()
 
 
@@ -26,6 +35,12 @@ def plot_correctness(array, every) -> None:
     plt.figure(figsize=(15,4))
     plt.title("Percent correct moves compared to baseline")
     plt.plot(np.arange(0,len(array))*every, array)
+    plt.plot(
+        np.arange(0,len(array))*every,
+        np.cumsum(array) / np.arange(1,len(array)+1),
+        label="Rolling Avg."
+    )
+    plt.legend()
     plt.show()
 
 
@@ -59,54 +74,55 @@ def plot_mesh(axis, data, ranges, ticks=None):
         axis.set(yticks=ranges[0], yticklabels=ticks)
 
 
-def generate_mesh(q: object) -> np.ndarray:
-    value_det = np.zeros((3, 21+1, 11+1))
+def extract_best(values: dict, return_type: str="string"):
+    moves = ["hit", "stay", "double", "surrender"]
 
-    for (player, house, useable_ace, can_split), vals in q.items():
-        moves = ["stay", "hit", "double"]
+    dict_moves = {k:v for k,v in values.items() if k in moves}
+
+    if return_type == "value":
+        return max(dict_moves.values())
+    
+    max_val = max(dict_moves,key=dict_moves.get)
+    if max_val in ["double", "surrender"]:
+        moves = ["hit", "stay"]
+        dict_moves = {k:v for k,v in values.items() if k in moves}
+        max_val = max_val[:2].title() + "/" + max(dict_moves, key=dict_moves.get)[:2].title()
+    else:
+        max_val = max_val[:2].title()
+
+    return max_val
+
+def generate_grid(q: dict, return_type: str="string") -> np.ndarray:
+    """
+    takes a Q dict and a return_type
+    if return_type == "string":
+        return a str detailing the best move.
+        if best move is double / surrender (when you can't split), also
+        append best move for instance when you can't actually double / surrender
+    if return_type == "value"
+        simply return the maximum q value
+    do this for each of hard total, soft total, can split.
+    """
+    assert return_type in ["string", "value"], "invalid return_type"
+    if return_type == "string":
+        fill = np.empty((3, 21 + 1, 11 + 1), dtype="O")
+    else:
+        fill = np.full((3, 21 + 1, 11 + 1), np.nan)
+
+    for (player, house, useable_ace), vals in q.items():
+        vals: dict
+        can_split = (not player % 2) and ((not useable_ace) or (player == 12))
+
+        if not useable_ace:
+            fill[0, player, house] = extract_best(vals, return_type=return_type)
+        if useable_ace and (not can_split):
+            fill[1, player, house] = extract_best(vals, return_type=return_type)
         if can_split:
-            moves.append("split")
-
-        dict_moves = {k:v for k,v in vals.items() if k in moves}
-        if not can_split:
-            value_det[int(useable_ace), player, house] = max(dict_moves.values())
-        else:
-            player_ind = int(player / 2)
-            if useable_ace:
-                if player == 12:
-                    player_ind = 11
-                else:
-                    continue
-            value_det[2, player_ind, house] =  max(dict_moves.values())
-
-    return value_det
-
-
-def generate_grid(q: object) -> Tuple[np.ndarray, np.ndarray]:
-
-    fill = np.empty((3, 21+1, 11+1), dtype="O")
-
-    for (player, house, useable_ace, can_split), vals in q.items():
-        moves = ["stay", "hit", "double"]
-        if can_split:
-            moves.append("split")
-        dict_moves = {k:v for k,v in vals.items() if k in moves}
-
-        max_val = max(dict_moves,key=dict_moves.get)
-        if not can_split:
-            if max_val == "double":
-                dict_no_double = {k:v for k,v in dict_moves.items() if k != "double"}
-                max_val = max_val[:2].title() + "/" + max(dict_no_double,key=dict_no_double.get)[:2].title()
+            if return_type == "string":
+                max_val = max(vals, key=vals.get)[:2].title()
             else:
-                max_val = max_val[:2].title()
-
-            fill[int(useable_ace), player, house] = max_val
-        else:
-            player_ind = int(player / 2)
-            if useable_ace:
-                if player == 12:
-                    player_ind = 11
-            
-            fill[2, player_ind, house] = max_val[:2].title()
-
+                max_val = max(vals.values())
+            player_ind = 11 if useable_ace else int(player / 2)
+            fill[2, player_ind, house] = max_val
+    
     return fill
