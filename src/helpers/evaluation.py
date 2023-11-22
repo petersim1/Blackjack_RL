@@ -25,8 +25,8 @@ def median_cum_rewards(rewards_games: List[List[List[float]]]) -> np.ndarray:
 
 
 def compare_to_accepted(
-        q: object,
-        accepted_q: object,
+        q: dict,
+        accepted_q: dict,
         game_hyperparams: object,
         n_rounds: int
     ):

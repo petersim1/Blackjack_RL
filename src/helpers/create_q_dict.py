@@ -32,7 +32,10 @@ def init_q(moves_blacklist: List[str]=[], mode: Optional[str]=None) -> object:
             
         for h in range(2,12) :
             for ace in ace_arr:
-                Q[(p, h, ace)] = {m:0 for m in moves}
+                if mode is None:
+                    Q[(p, h, ace)] = {m:-1 for m in moves}
+                else:
+                    Q[(p, h, ace)] = {m:0 for m in moves}
 
     if mode == "accepted":
         return init_accepted_q(Q)

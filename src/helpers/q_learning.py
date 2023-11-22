@@ -49,8 +49,10 @@ def gen_episode(
         s_a_pairs[nHand].append(s_a_pair)
 
         if move == "split" :
-            s_a_pairs.append([])
-            conditional_action_spaces.append([])
+            # s_a_pairs.append([])
+            # conditional_action_spaces.append([])
+            s_a_pairs.append(s_a_pairs[nHand].copy())
+            conditional_action_spaces.append(conditional_action_spaces[nHand].copy())
 
         game.step_player(player_ind, move)
         
@@ -117,10 +119,11 @@ def learn_policy(
                 )]
                 # This is an important component, as it dicates how to aggregate
                 # rewards for when a split occurred.
-                if s_a_pair.move == "split":
-                    r = sum(player_winnings[hand:(hand+2)]) / 2
-                else:
-                    r = player_winnings[hand]
+                # if s_a_pair.move == "split":
+                #     r = sum(player_winnings[hand:(hand+2)]) / 2
+                # else:
+                #     r = player_winnings[hand]
+                r = player_winnings[hand]
                 max_q_p = 0
                 if (j+1) < len(s_a_pairs[i][hand]):
                     # This condition basically says, did you hit or split (not aces)?
@@ -135,11 +138,11 @@ def learn_policy(
 
                     max_q_p = max([v for k,v in q_dict.items() if k in action_space])
                     # POTENTIALLY REMOVE THIS IF STATEMENT!!
-                    if s_a_pair.move != "split":
+                    # if s_a_pair.move != "split":
                     # for splits, this condition is always met unless it's splitting Aces.
                     # we completely lose information that a split occurred.
                     # I can tell it to retain a reward based on final outcome, if split.
-                        r = 0
+                    r = 0
                 old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr*(r + gamma * max_q_p - old_q[s_a_pair.move])
 
             if j < len(s_a_pairs[i][hand])-1:

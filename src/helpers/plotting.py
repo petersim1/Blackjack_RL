@@ -26,6 +26,12 @@ def plot_correctness(array, every) -> None:
     plt.figure(figsize=(15,4))
     plt.title("Percent correct moves compared to baseline")
     plt.plot(np.arange(0,len(array))*every, array)
+    plt.plot(
+        np.arange(0,len(array))*every,
+        np.cumsum(array) / np.arange(1,len(array)+1),
+        label="Rolling Avg."
+    )
+    plt.legend()
     plt.show()
 
 
@@ -96,13 +102,13 @@ def generate_grid(q: dict, return_type: str="string") -> np.ndarray:
 
     for (player, house, useable_ace), vals in q.items():
         vals: dict
-        can_split = not player % 2
+        can_split = (not player % 2) and ((not useable_ace) or (player == 12))
 
         if not useable_ace:
             fill[0, player, house] = extract_best(vals, return_type=return_type)
-        if useable_ace and (player != 12):
+        if useable_ace and (not can_split):
             fill[1, player, house] = extract_best(vals, return_type=return_type)
-        if can_split and ((not useable_ace) or (player == 12)):
+        if can_split:
             if return_type == "string":
                 max_val = max(vals, key=vals.get)[:2].title()
             else:

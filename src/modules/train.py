@@ -32,7 +32,7 @@ class Trainer(EarlyStop):
     method: str
     gamma: float
     leniency: int=10
-    moves_blacklist: List[str] = field(default_factory=lambda : ["surrender"])
+    moves_blacklist: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         EarlyStop.__init__(self, leniency=self.leniency)

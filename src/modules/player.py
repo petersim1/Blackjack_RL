@@ -106,7 +106,7 @@ class Player:
         can_stay = (not self.aces_split) or self.rules.hit_after_split_aces
         can_surrender = (n==2) and (n_hands==1) and (self.rules.allow_surrender)
         can_split = (n==2) and ((self.cards[i_hand].cards[0].card == self.cards[i_hand].cards[1].card) or ((self.cards[i_hand].cards[0].value == self.cards[i_hand].cards[1].value) and self.rules.split_any_ten))
-        can_double = (n==2) and (((n_hands > 1) & self.rules.double_after_split) or (n_hands == 1)) and can_hit
+        can_double = (n==2) and (((n_hands > 1) and self.rules.double_after_split) or (n_hands == 1)) and can_hit
                 
         if total < 21 :
             if can_stay: possible_moves.append("stay")
