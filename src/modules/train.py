@@ -46,8 +46,7 @@ class Trainer(EarlyStop):
             game: Game,
             wagers: List[float],
             lr: float,
-            eps: Optional[float]=None,
-            reset_deck: bool=False
+            eps: Optional[float]=None
         ) -> None:
         '''
         To allow for decayed learning rate and decayed epsilon,
@@ -63,9 +62,6 @@ class Trainer(EarlyStop):
             gamma=self.gamma,
             method=self.method
         )
-
-        if reset_deck:
-            game.reset_game()
 
     async def evaluate(self, n_rounds: int, n_games: int, game_hyperparams: object):
 

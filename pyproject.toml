@@ -17,6 +17,7 @@ pydantic = "^1.10.7"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.23.1"
+flake8 = "^6.1.0"
 
 [build-system]
 requires = ["poetry-core"]
