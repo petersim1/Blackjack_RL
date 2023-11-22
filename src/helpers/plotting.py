@@ -2,23 +2,32 @@ from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_loss(array: List[float], every: int, label: str, include_max: bool=False) -> None:
+def plot_learning_curve(
+        array: List[float],
+        every: int,
+        label: str,
+        include_avg: bool=True,
+        include_max: bool=False,
+        **kwargs,
+    ) -> None:
     plt.figure(figsize=(15,4))
     plt.plot(
         np.arange(0,len(array))*every,
         array,
         label=label
     )
-    plt.plot(
-        np.arange(0,len(array))*every,
-        np.cumsum(array) / np.arange(1,len(array)+1),
-        label="Rolling Avg."
-    )
+    if include_avg:
+        plt.plot(
+            np.arange(0,len(array))*every,
+            np.cumsum(array) / np.arange(1,len(array)+1),
+            label="Rolling Avg."
+        )
     if include_max:
         plt.vlines(x=np.argmax(array)*every,ymin=min(array),ymax=max(array),color="k")
-    plt.title("Q-Learning")
-    plt.ylabel("Avg Reward at Evaluation")
-    plt.legend()
+    plt.title(kwargs["title"])
+    plt.ylabel(kwargs["ylabel"])
+    if include_avg:
+        plt.legend()
     plt.show()
 
 

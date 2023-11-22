@@ -5,7 +5,7 @@ from copy import deepcopy
 from src.helpers.create_q_dict import init_q
 from src.helpers.q_learning import learn_policy
 from src.helpers.runner import play_n_games
-from src.helpers.evaluation import mean_cum_rewards, compare_to_accepted
+from src.helpers.evaluation import mean_cum_rewards, compare_to_accepted, q_value_assessment
 from src.modules.game import Game
 
 @dataclass(kw_only=True)
@@ -85,12 +85,18 @@ class Trainer(EarlyStop):
             n_rounds=n_rounds
         )
 
+        avg_max_q = q_value_assessment(
+            q=self.q,
+            game_hyperparams=game_hyperparams,
+            n_rounds=n_rounds
+        )
+
         if self.early_stop:
             self._update(mean_reward)
             if not self.counter:
                 self.best_q = deepcopy(self.q)
 
-        return mean_reward, percent_correct_baseline
+        return mean_reward, percent_correct_baseline, avg_max_q
 
     def get_q(self, backtrack: bool=False):
         if self.early_stop and backtrack:
