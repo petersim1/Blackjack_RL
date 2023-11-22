@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -99,7 +99,9 @@ def extract_best(values: dict, return_type: str = "string"):
     return max_val
 
 
-def generate_grid(q: dict, return_type: str = "string") -> np.ndarray:
+def generate_grid(
+        q: dict,
+        return_type: str = "string") -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     takes a Q dict and a return_type
     if return_type == "string":
@@ -112,24 +114,28 @@ def generate_grid(q: dict, return_type: str = "string") -> np.ndarray:
     """
     assert return_type in ["string", "value"], "invalid return_type"
     if return_type == "string":
-        fill = np.empty((3, 21 + 1, 11 + 1), dtype="O")
+        hard = np.empty((16, 10), dtype="O")
+        soft = np.empty((8, 10), dtype="O")
+        split = np.empty((10, 10), dtype="O")
     else:
-        fill = np.full((3, 21 + 1, 11 + 1), np.nan)
+        hard = np.full((16, 10), np.nan)
+        soft = np.full((8, 10), np.nan)
+        split = np.full((10, 10), np.nan)
 
     for (player, house, useable_ace), vals in q.items():
         vals: dict
         can_split = (not player % 2) and ((not useable_ace) or (player == 12))
 
-        if not useable_ace:
-            fill[0, player, house] = extract_best(vals, return_type=return_type)
+        if (not useable_ace) and (4 < player < 21):
+            hard[20 - player, house - 2] = extract_best(vals, return_type=return_type)
         if useable_ace and (not can_split):
-            fill[1, player, house] = extract_best(vals, return_type=return_type)
+            soft[20 - player, house - 2] = extract_best(vals, return_type=return_type)
         if can_split:
             if return_type == "string":
                 max_val = max(vals, key=vals.get)[:2].title()
             else:
                 max_val = max(vals.values())
             player_ind = 11 if useable_ace else int(player / 2)
-            fill[2, player_ind, house] = max_val
+            split[11 - player_ind, house - 2] = max_val
 
-    return fill
+    return hard, soft, split
