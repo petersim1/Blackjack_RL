@@ -1,29 +1,32 @@
 from typing import List, Tuple
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 def plot_learning_curve(
-        array: List[float],
-        every: int,
-        label: str,
-        include_avg: bool=True,
-        include_max: bool=False,
-        **kwargs,
-    ) -> None:
-    plt.figure(figsize=(15,4))
-    plt.plot(
-        np.arange(0,len(array))*every,
-        array,
-        label=label
-    )
+    array: List[float],
+    every: int,
+    label: str,
+    include_avg: bool = True,
+    include_max: bool = False,
+    **kwargs,
+) -> None:
+    plt.figure(figsize=(15, 4))
+    plt.plot(np.arange(0, len(array)) * every, array, label=label)
     if include_avg:
         plt.plot(
-            np.arange(0,len(array))*every,
-            np.cumsum(array) / np.arange(1,len(array)+1),
-            label="Rolling Avg."
+            np.arange(0, len(array)) * every,
+            np.cumsum(array) / np.arange(1, len(array) + 1),
+            label="Rolling Avg.",
         )
     if include_max:
-        plt.vlines(x=np.argmax(array)*every,ymin=min(array),ymax=max(array),color="k")
+        plt.vlines(
+            x=np.argmax(array) * every,
+            ymin=min(array),
+            ymax=max(array),
+            color="k",
+        )
     plt.title(kwargs["title"])
     plt.ylabel(kwargs["ylabel"])
     if include_avg:
@@ -32,27 +35,26 @@ def plot_learning_curve(
 
 
 def plot_correctness(array, every) -> None:
-    plt.figure(figsize=(15,4))
+    plt.figure(figsize=(15, 4))
     plt.title("Percent correct moves compared to baseline")
-    plt.plot(np.arange(0,len(array))*every, array)
+    plt.plot(np.arange(0, len(array)) * every, array)
     plt.plot(
-        np.arange(0,len(array))*every,
-        np.cumsum(array) / np.arange(1,len(array)+1),
-        label="Rolling Avg."
+        np.arange(0, len(array)) * every,
+        np.cumsum(array) / np.arange(1, len(array) + 1),
+        label="Rolling Avg.",
     )
     plt.legend()
     plt.show()
 
 
 def plot_bar(datas, labels, alphas):
-
     unique_vals = np.unique(datas)
 
-    for i,data in enumerate(datas):
+    for i, data in enumerate(datas):
         out = []
         values, freq = np.unique(data, return_counts=True)
         freq = freq / freq.sum()
-        freq_dict = dict(zip(values,freq))
+        freq_dict = dict(zip(values, freq))
 
         for val in unique_vals:
             if val in freq_dict:
@@ -64,8 +66,10 @@ def plot_bar(datas, labels, alphas):
 
 
 def plot_mesh(axis, data, ranges, ticks=None):
-    x,y = np.meshgrid(ranges[0], ranges[1])
-    axis.plot_surface(x, y, data, rstride=1, cstride=1,cmap="viridis", edgecolor="none")
+    x, y = np.meshgrid(ranges[0], ranges[1])
+    axis.plot_surface(
+        x, y, data, rstride=1, cstride=1, cmap="viridis", edgecolor="none"
+    )
     axis.view_init(azim=-25)
     axis.set_xlabel("House Shows")
     axis.set_ylabel("Player Shows")
@@ -74,25 +78,30 @@ def plot_mesh(axis, data, ranges, ticks=None):
         axis.set(yticks=ranges[0], yticklabels=ticks)
 
 
-def extract_best(values: dict, return_type: str="string"):
+def extract_best(values: dict, return_type: str = "string"):
     moves = ["hit", "stay", "double", "surrender"]
 
-    dict_moves = {k:v for k,v in values.items() if k in moves}
+    dict_moves = {k: v for k, v in values.items() if k in moves}
 
     if return_type == "value":
         return max(dict_moves.values())
-    
-    max_val = max(dict_moves,key=dict_moves.get)
+
+    max_val = max(dict_moves, key=dict_moves.get)
     if max_val in ["double", "surrender"]:
         moves = ["hit", "stay"]
-        dict_moves = {k:v for k,v in values.items() if k in moves}
-        max_val = max_val[:2].title() + "/" + max(dict_moves, key=dict_moves.get)[:2].title()
+        dict_moves = {k: v for k, v in values.items() if k in moves}
+        max_val = (
+            max_val[:2].title() + "/" + max(dict_moves, key=dict_moves.get)[:2].title()
+        )
     else:
         max_val = max_val[:2].title()
 
     return max_val
 
-def generate_grid(q: dict, return_type: str="string") -> np.ndarray:
+
+def generate_grid(
+        q: dict,
+        return_type: str = "string") -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     takes a Q dict and a return_type
     if return_type == "string":
@@ -105,24 +114,28 @@ def generate_grid(q: dict, return_type: str="string") -> np.ndarray:
     """
     assert return_type in ["string", "value"], "invalid return_type"
     if return_type == "string":
-        fill = np.empty((3, 21 + 1, 11 + 1), dtype="O")
+        hard = np.empty((16, 10), dtype="O")
+        soft = np.empty((8, 10), dtype="O")
+        split = np.empty((10, 10), dtype="O")
     else:
-        fill = np.full((3, 21 + 1, 11 + 1), np.nan)
+        hard = np.full((16, 10), np.nan)
+        soft = np.full((8, 10), np.nan)
+        split = np.full((10, 10), np.nan)
 
     for (player, house, useable_ace), vals in q.items():
         vals: dict
         can_split = (not player % 2) and ((not useable_ace) or (player == 12))
 
-        if not useable_ace:
-            fill[0, player, house] = extract_best(vals, return_type=return_type)
+        if (not useable_ace) and (4 < player < 21):
+            hard[20 - player, house - 2] = extract_best(vals, return_type=return_type)
         if useable_ace and (not can_split):
-            fill[1, player, house] = extract_best(vals, return_type=return_type)
+            soft[20 - player, house - 2] = extract_best(vals, return_type=return_type)
         if can_split:
             if return_type == "string":
                 max_val = max(vals, key=vals.get)[:2].title()
             else:
                 max_val = max(vals.values())
             player_ind = 11 if useable_ace else int(player / 2)
-            fill[2, player_ind, house] = max_val
-    
-    return fill
+            split[11 - player_ind, house - 2] = max_val
+
+    return hard, soft, split
