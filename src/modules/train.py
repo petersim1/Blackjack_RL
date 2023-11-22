@@ -3,11 +3,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from src.helpers.create_q_dict import init_q
-from src.helpers.evaluation import (
-    compare_to_accepted,
-    mean_cum_rewards,
-    q_value_assessment,
-)
+from src.helpers.evaluation import (compare_to_accepted, mean_cum_rewards,
+                                    q_value_assessment)
 from src.helpers.q_learning import learn_policy
 from src.helpers.runner import play_n_games
 from src.modules.game import Game
@@ -82,8 +79,6 @@ class Trainer(EarlyStop):
         percent_correct_baseline = compare_to_accepted(
             q=self.q,
             accepted_q=self.accepted_q,
-            game_hyperparams=game_hyperparams,
-            n_rounds=n_rounds,
         )
 
         avg_max_q = q_value_assessment(

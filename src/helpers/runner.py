@@ -59,7 +59,7 @@ def play_round(
     house_card_show = game.get_house_show()
     house_value = house_card_show.value if house_card_show.value > 1 else 11
 
-    player: type[Player]
+    player: Player
     for i in range(len(game.players)):
         player = game.players[i]
         if verbose:

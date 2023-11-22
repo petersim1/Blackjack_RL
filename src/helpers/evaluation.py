@@ -3,6 +3,7 @@ from typing import List
 
 import numpy as np
 
+from src.helpers.plotting import generate_grid
 from src.helpers.runner import play_round, select_action
 from src.modules.game import Game
 from src.modules.player import Player
@@ -63,47 +64,41 @@ def q_value_assessment(q: dict, game_hyperparams: object, n_rounds: int):
     return sum(max_q_values) / len(max_q_values)
 
 
-def compare_to_accepted(
-    q: dict, accepted_q: dict, game_hyperparams: object, n_rounds: int
-):
+def compare_to_accepted(q: dict, accepted_q: dict):
     """
-    Simulates game play, and determines how many moves were 'optimal'
-    according to a baseline policy
+    Doesn't simulate gameplay, but instead just extracts optimal
+    move from accepted dict vs. predicted dict.
+
+    Relies on exact match, meaning predicted best move followed
+    by the alternate best move if the first one isn't available.
     """
+    hard, soft, split = generate_grid(q, return_type="string")
+    hard_ac, soft_ac, split_ac = generate_grid(accepted_q, return_type="string")
 
-    game = Game(**game_hyperparams)
+    correct_moves = {}
 
-    correct_moves = []
+    n_correct = 0
+    for i, row in enumerate(hard):
+        for j, col in enumerate(row):
+            if col == hard_ac[i, j]:
+                n_correct += 1
+    correct_moves["hard"] = n_correct / np.prod(hard.shape)
 
-    for _ in range(n_rounds):
-        game.init_round([1])
-        game.deal_init()
-        house_card_show = game.get_house_show()
-        house_value = house_card_show.value if house_card_show.value > 1 else 11
+    n_correct = 0
+    for i, row in enumerate(soft):
+        for j, col in enumerate(row):
+            if col == soft_ac[i, j]:
+                n_correct += 1
+    correct_moves["soft"] = n_correct / np.prod(soft.shape)
 
-        for i in range(len(game.players)):
-            player = game.players[i]
-            while not player.is_done():
-                player_show, useable_ace = player.get_value()
-                policy = player.get_valid_moves()
+    n_correct = 0
+    for i, row in enumerate(split):
+        for j, col in enumerate(row):
+            if col == split_ac[i, j]:
+                n_correct += 1
+    correct_moves["split"] = n_correct / np.prod(split.shape)
 
-                state = q[(player_show, house_value, useable_ace)]
-                accepted_state = accepted_q[(player_show, house_value, useable_ace)]
-
-                move = select_action(
-                    state=state, policy=policy, epsilon=-1, method="epsilon"
-                )
-                accepted_move = select_action(
-                    state=accepted_state,
-                    policy=policy,
-                    epsilon=-1,
-                    method="epsilon",
-                )
-                correct_moves.append(move == accepted_move)
-
-                game.step_player(i, move)
-
-    return sum(correct_moves) / len(correct_moves)
+    return correct_moves
 
 
 async def play_until_bankroll(
