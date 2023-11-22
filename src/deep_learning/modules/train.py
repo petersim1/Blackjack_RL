@@ -1,24 +1,28 @@
 from __future__ import annotations
-import torch
-import torch.nn as nn
+
 from collections import deque
 from copy import deepcopy
 from typing import TYPE_CHECKING
+
 import numpy as np
+import torch
+import torch.nn as nn
 
-from src.deep_learning.utils.replay_buffer import gather_buffer_obs, gather_target_obs, update_replay_buffer
 from src.deep_learning.utils.play import play_games
-
+from src.deep_learning.utils.replay_buffer import (
+    gather_buffer_obs,
+    gather_target_obs,
+    update_replay_buffer,
+)
 
 if TYPE_CHECKING:
-    # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
+    # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors. # noqa: E501
     from src.deep_learning.modules import Net
     from src.modules.game import Game
 
+
 class Trainer:
-
     def __init__(self, online_net, target_net, lr, replay_size, include_count):
-
         self.online_net: type[Net] = online_net
         self.target_net: type[Net] = target_net
 
@@ -28,19 +32,12 @@ class Trainer:
         self.optimizer = torch.optim.Adam(self.online_net.parameters(), lr=lr)
 
         self.replay_size = replay_size
-        self.replay_buffer = deque([],maxlen=replay_size)
+        self.replay_buffer = deque([], maxlen=replay_size)
 
-    
     def copy_online_to_target(self):
-
         self.target_net.load_state_dict(deepcopy(self.online_net.state_dict()))
 
-
-    def update_buffer(
-        self,
-        blackjack: type[Game],
-        method: str="random"
-    ):
+    def update_buffer(self, blackjack: type[Game], method: str = "random"):
         with torch.no_grad():
             update_replay_buffer(
                 blackjack=blackjack,
@@ -48,16 +45,22 @@ class Trainer:
                 model=self.online_net,
                 include_count=self.include_count,
                 include_continuous_count=False,
-                method=method
+                method=method,
             )
 
-    
     def train_epoch(self, batch_size: int, gamma: float):
-
-        obs_t, action_space, moves_t, rewards_t, dones_t, obs_next_t, action_space_next = gather_buffer_obs(
+        (
+            obs_t,
+            action_space,
+            moves_t,
+            rewards_t,
+            dones_t,
+            obs_next_t,
+            action_space_next,
+        ) = gather_buffer_obs(
             replay_buffer=self.replay_buffer,
             batch_size=batch_size,
-            moves=self.online_net.moves
+            moves=self.online_net.moves,
         )
 
         targets_t = gather_target_obs(
@@ -66,7 +69,7 @@ class Trainer:
             action_space_next=action_space_next,
             rewards_t=rewards_t,
             dones_t=dones_t,
-            gamma=gamma
+            gamma=gamma,
         )
 
         self.online_net.train()
@@ -90,8 +93,8 @@ class Trainer:
             n_rounds=n_rounds,
             wagers=wagers,
             include_count=self.include_count,
-            game_hyperparams=game_hyperparams
+            game_hyperparams=game_hyperparams,
         )
-        mean_reward = np.mean(r[:,0,:])
+        mean_reward = np.mean(r[:, 0, :])
 
         return mean_reward

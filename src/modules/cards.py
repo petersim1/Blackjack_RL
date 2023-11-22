@@ -1,13 +1,16 @@
 from dataclasses import dataclass, field
-from typing import Union, List
 from enum import Enum
+from typing import List, Union
+
 from numpy.random import choice
+
 
 class SuitEnum(Enum):
     hearts = "h"
     clubs = "c"
     diamonds = "d"
     spades = "s"
+
 
 @dataclass
 class Card:
@@ -20,6 +23,7 @@ class Card:
             self.value = self.card
         else:
             self.value = 1 if self.card == "A" else 10
+
 
 @dataclass
 class Cards:
@@ -39,10 +43,10 @@ class Cards:
     def generate_deck(n) -> List[Card]:
         cards = []
         for suit in SuitEnum:
-            for c in [2,3,4,5,6,7,8,9,10,"J","Q","K","A"]:
+            for c in [2, 3, 4, 5, 6, 7, 8, 9, 10, "J", "Q", "K", "A"]:
                 cards.extend([Card(suit, c)] * n)
         return cards
-    
+
     def _update_value(self) -> None:
         summed = 0
         aces = 0
@@ -55,15 +59,16 @@ class Cards:
                 self.useable_ace = True
                 summed += 10
         self.total = summed
-    
+
     def _decorator(f):
         def inner(self, *args, **kwargs):
             res = f(self, *args, **kwargs)
             if self.requires_total:
                 self._update_value()
             return res
+
         return inner
-    
+
     @_decorator
     def add_cards(self, cards: Union[Card, List[Card]]) -> None:
         if isinstance(cards, Card):
@@ -82,7 +87,7 @@ class Cards:
         self.cards = []
 
     @_decorator
-    def select_card(self, deplete: bool=True) -> Card:
+    def select_card(self, deplete: bool = True) -> Card:
         if not len(self.cards):
             raise Exception("no cards in the deck")
         ind = choice(len(self.cards))

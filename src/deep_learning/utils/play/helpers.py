@@ -1,23 +1,41 @@
-from __future__ import annotations # required for preventing the cyclical import of type annotations
-from typing import List, TYPE_CHECKING
+from __future__ import (
+    annotations,
+)  # required for preventing the cyclical import of type annotations
+
+from typing import TYPE_CHECKING, List
+
 import numpy as np
 import torch
 
 if TYPE_CHECKING:
-    # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors.
-    from src.modules.player import Player
+    # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors. # noqa: E501
     from src.deep_learning.modules import Net
-    
+    from src.modules.player import Player
+
+
 def get_observation(include_count: bool, **kwargs):
-
     if include_count:
-        return (kwargs["player_total"], kwargs["house_show"], kwargs["useable_ace"], kwargs["can_split"], kwargs["can_double"], kwargs["count"])
-    
-    return (kwargs["player_total"], kwargs["house_show"], kwargs["useable_ace"], kwargs["can_split"], kwargs["can_double"])
+        return (
+            kwargs["player_total"],
+            kwargs["house_show"],
+            kwargs["useable_ace"],
+            kwargs["can_split"],
+            kwargs["can_double"],
+            kwargs["count"],
+        )
+
+    return (
+        kwargs["player_total"],
+        kwargs["house_show"],
+        kwargs["useable_ace"],
+        kwargs["can_split"],
+        kwargs["can_double"],
+    )
 
 
-def get_action(model: type[Net], method: str, policy: List[str], observation: tuple) -> str:
-
+def get_action(
+    model: type[Net], method: str, policy: List[str], observation: tuple
+) -> str:
     if method == "random":
         move = np.random.choice(policy)
         return move
@@ -30,12 +48,12 @@ def get_action(model: type[Net], method: str, policy: List[str], observation: tu
 
 
 def create_state_action(
-        player: type[Player],
-        house_show: int,
-        include_count: bool,
-        true_count: float,
-        model: type[Net],
-        method: str="argmax"
+    player: type[Player],
+    house_show: int,
+    include_count: bool,
+    true_count: float,
+    model: type[Net],
+    method: str = "argmax",
 ):
     player_total, useable_ace = player.get_value()
 
@@ -54,16 +72,14 @@ def create_state_action(
         useable_ace=2 * int(useable_ace) - 1,
         can_split=2 * int(can_split) - 1,
         can_double=2 * int(can_double) - 1,
-        count=true_count
+        count=true_count,
     )
 
     move = get_action(
-        model=model,
-        method=method,
-        policy=policy,
-        observation=observation
+        model=model, method=method, policy=policy, observation=observation
     )
 
     return observation, move, policy
+
 
 __all__ = ["get_observation", "get_action", "create_state_action"]

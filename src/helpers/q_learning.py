@@ -1,16 +1,13 @@
 from typing import List, Tuple
 
-from src.pydantic_types import StateActionPair, ConditionalActionSpace
-from src.modules.game import Game
 from src.helpers.runner import select_action
+from src.modules.game import Game
+from src.pydantic_types import ConditionalActionSpace, StateActionPair
 
 
 def gen_episode(
-        game: Game,
-        player_ind: int,
-        q: object,
-        epsilon: float,
-        method: str) -> Tuple[List[List[StateActionPair]], ConditionalActionSpace]:
+    game: Game, player_ind: int, q: object, epsilon: float, method: str
+) -> Tuple[List[List[StateActionPair]], ConditionalActionSpace]:
     """
     Given the blackjack module, index of Player, Q values object, epsilon
     value, and method;
@@ -28,21 +25,24 @@ def gen_episode(
     house_value = house_card_show.value if house_card_show.value > 1 else 11
 
     while not player.is_done():
-
         player_total, useable_ace = player.get_value()
-        nHand = player.i_hand       # need this for isolating "split" moves. Can access since decorator to update i_hand is called in get_value() method.
+        nHand = (
+            player.i_hand
+        )  # need this for isolating "split" moves. Can access since decorator to update i_hand is called in get_value() method. # noqa: E501
 
         policy = player.get_valid_moves()
         conditional_action_spaces[nHand].append((policy))
 
         q_dict = q[(player_total, house_value, useable_ace)]
-        move = select_action(state=q_dict, policy=policy, epsilon=epsilon, method=method)
+        move = select_action(
+            state=q_dict, policy=policy, epsilon=epsilon, method=method
+        )
 
         s_a_pair = StateActionPair(
             player_show=player_total,
             house_show=house_value,
             useable_ace=useable_ace,
-            move=move
+            move=move,
         )
         s_a_pairs[nHand].append(s_a_pair)
 
@@ -65,13 +65,13 @@ def gen_episode(
 
 
 def learn_policy(
-        game: type[Game],
-        q: object,
-        epsilon: float,
-        gamma: float,
-        lr: float,
-        method: str = "epsilon") -> None:
-
+    game: type[Game],
+    q: object,
+    epsilon: float,
+    gamma: float,
+    lr: float,
+    method: str = "epsilon",
+) -> None:
     """
     Given the Game module, learn an optimal policy inplace:
     - epsilon : e-greedy hyperparameter
@@ -96,11 +96,7 @@ def learn_policy(
 
     for ind in range(len(game.players)):
         s_a, action_space = gen_episode(
-            game=game,
-            player_ind=ind,
-            q=q,
-            epsilon=epsilon,
-            method=method
+            game=game, player_ind=ind, q=q, epsilon=epsilon, method=method
         )
         s_a_pairs.append(s_a)
         conditional_action_space.append(action_space)
@@ -113,15 +109,19 @@ def learn_policy(
     for i, player_winnings in enumerate(results):
         j = 0  # move number in state-action pair
         hand = 0  # hand number (to account for splits)
-        while (hand < len(s_a_pairs[i])):
-            if s_a_pairs[i][hand]:  # otherwise, player blackjack, and we can't learn from this since no moves are taken.
+        while hand < len(s_a_pairs[i]):
+            if s_a_pairs[i][
+                hand
+            ]:  # otherwise, player blackjack, and we can't learn from this since no moves are taken. # noqa: E501
                 s_a_pair = s_a_pairs[i][hand][j]
 
-                old_q = q[(
-                    s_a_pair.player_show,
-                    s_a_pair.house_show,
-                    s_a_pair.useable_ace,
-                )]
+                old_q = q[
+                    (
+                        s_a_pair.player_show,
+                        s_a_pair.house_show,
+                        s_a_pair.useable_ace,
+                    )
+                ]
                 # This is an important component, as it dicates how to aggregate
                 # rewards for when a split occurred.
                 # if s_a_pair.move == "split":
@@ -135,11 +135,13 @@ def learn_policy(
                     s_a_pair_p = s_a_pairs[i][hand][j + 1]
                     action_space = conditional_action_space[i][hand][j + 1]
 
-                    q_dict = q[(
-                        s_a_pair_p.player_show,
-                        s_a_pair_p.house_show,
-                        s_a_pair_p.useable_ace,
-                    )]
+                    q_dict = q[
+                        (
+                            s_a_pair_p.player_show,
+                            s_a_pair_p.house_show,
+                            s_a_pair_p.useable_ace,
+                        )
+                    ]
 
                     max_q_p = max([v for k, v in q_dict.items() if k in action_space])
                     """
@@ -148,11 +150,13 @@ def learn_policy(
                     """
                     # POTENTIALLY REMOVE THIS IF STATEMENT!!
                     # if s_a_pair.move != "split":
-                    # for splits, this condition is always met unless it's splitting Aces.
+                    # for splits, this condition is always met unless it's splitting Aces. # noqa: E501
                     # we completely lose information that a split occurred.
                     # I can tell it to retain a reward based on final outcome, if split.
                     r = 0
-                old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr * (r + gamma * max_q_p - old_q[s_a_pair.move])
+                old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr * (
+                    r + gamma * max_q_p - old_q[s_a_pair.move]
+                )
 
             if j < len(s_a_pairs[i][hand]) - 1:
                 j += 1

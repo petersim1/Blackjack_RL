@@ -4,7 +4,13 @@
   "editor.tabSize": 4,
   "editor.detectIndentation": false,
   "editor.indentSize": "tabSize",
-  "flake8.args": [
-    "--max-line-length=160",
-  ]
+  "editor.formatOnSave": false,
+  "editor.formatOnType": true,
+  "black-formatter.args": ["line-length=79"],
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  }
 }

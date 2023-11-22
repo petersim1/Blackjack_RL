@@ -1,23 +1,24 @@
-import pandas as pd
+from typing import List, Optional, Union
+
 import numpy as np
-from typing import List, Union, Optional
+import pandas as pd
 
 colorMap = {
-    "St":"yellow",
-    "Hi":"white",
-    "Do":"green",
-    "Su":"grey",
-    "Sp":"blue",
+    "St": "yellow",
+    "Hi": "white",
+    "Do": "green",
+    "Su": "grey",
+    "Sp": "blue",
     "Do/Hi": "green",
-    "Do/St": "green"
+    "Do/St": "green",
 }
 
+
 def show_action_table(
-        data: np.ndarray,
-        xticks: Optional[List[Union[int,str]]]=None,
-        yticks: Optional[List[Union[int,str]]]=None
+    data: np.ndarray,
+    xticks: Optional[List[Union[int, str]]] = None,
+    yticks: Optional[List[Union[int, str]]] = None,
 ) -> pd.DataFrame:
-    
     x_range = np.where(data.any(axis=1))[0]
     y_range = np.where(data.any(axis=0))[0]
 
@@ -36,5 +37,6 @@ def show_action_table(
     df = df.style.applymap(lambda x: "background-color: %s; color: black" % colorMap[x])
 
     return df
+
 
 __all__ = ["show_action_table"]
