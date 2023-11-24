@@ -7,6 +7,7 @@ from src.helpers.evaluation import (compare_to_accepted, mean_cum_rewards,
                                     q_value_assessment)
 from src.helpers.q_learning import learn_policy
 from src.helpers.runner import play_n_games
+from src.modules.cards import Card
 from src.modules.game import Game
 
 
@@ -48,6 +49,7 @@ class Trainer(EarlyStop):
         game: Game,
         wagers: List[float],
         lr: float,
+        force_cards: List[Card] = [],
         eps: Optional[float] = None,
     ) -> None:
         """
@@ -56,7 +58,7 @@ class Trainer(EarlyStop):
         the module.
         """
         game.init_round(wagers)
-        game.deal_init()
+        game.deal_init(force_cards=force_cards)
         learn_policy(
             game=game,
             q=self.q,

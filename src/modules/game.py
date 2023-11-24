@@ -116,15 +116,26 @@ class Game:
         self.round_init = False
 
     @_decorator
-    def deal_init(self) -> None:
+    def deal_init(self, force_cards=[]) -> None:
+        """
+        force_cards is only mostly just useful during training.
+        to visit infrequent player cards dealt, we can force a set of 2 cards
+        and still have the module operate as expected.
+        """
         assert self.round_init, "Must initialize round before dealing"
+        if len(force_cards):
+            assert len(force_cards) == 2, "must include exactly 2 cards to force"
 
         for _ in range(2):
             for player in self.players:
-                card = self._select_card()
-                player._deal_card(card)
+                if not force_cards:
+                    card = self._select_card()
+                    player._deal_card(card)
             card = self._select_card()
             self.house._deal_card(card)
+        if force_cards:
+            for c in force_cards:
+                player._deal_card(c)
 
         if self.house.cards[0].total == 21:
             """

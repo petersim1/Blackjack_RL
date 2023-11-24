@@ -110,9 +110,8 @@ def learn_policy(
         j = 0  # move number in state-action pair
         hand = 0  # hand number (to account for splits)
         while hand < len(s_a_pairs[i]):
-            if s_a_pairs[i][
-                hand
-            ]:  # otherwise, player blackjack, and we can't learn from this since no moves are taken. # noqa: E501
+            if s_a_pairs[i][hand]:
+                # otherwise, player blackjack, and we can't learn from this since no moves are taken. # noqa: E501
                 s_a_pair = s_a_pairs[i][hand][j]
 
                 old_q = q[
@@ -152,7 +151,7 @@ def learn_policy(
                     # if s_a_pair.move != "split":
                     # for splits, this condition is always met unless it's splitting Aces. # noqa: E501
                     # we completely lose information that a split occurred.
-                    # I can tell it to retain a reward based on final outcome, if split.
+                    # I can tell it to retain a reward based on final outcome, if split. # noqa: E501
                     r = 0
                 old_q[s_a_pair.move] = old_q[s_a_pair.move] + lr * (
                     r + gamma * max_q_p - old_q[s_a_pair.move]
