@@ -78,6 +78,22 @@ def plot_mesh(axis, data, ranges, ticks=None):
         axis.set(yticks=ranges[0], yticklabels=ticks)
 
 
+def clean_text(val1, val2=""):
+    if val1 not in ["surrender", "split"]:
+        val1 = val1[:1].title()
+    else:
+        val1 = val1[:2].title()
+    if val2:
+        if val2 not in ["surrender", "split"]:
+            val2 = val2[:1].title()
+        else:
+            val2 = val2[:2].title()
+        val = val1 + "/" + val2
+    else:
+        val = val1
+    return val
+
+
 def extract_best(values: dict, return_type: str = "string"):
     moves = ["hit", "stay", "double", "surrender"]
 
@@ -86,17 +102,14 @@ def extract_best(values: dict, return_type: str = "string"):
     if return_type == "value":
         return max(dict_moves.values())
 
-    max_val = max(dict_moves, key=dict_moves.get)
-    if max_val in ["double", "surrender"]:
+    max_val1 = max(dict_moves, key=dict_moves.get)
+    max_val2 = ""
+    if max_val1 in ["double", "surrender"]:
         moves = ["hit", "stay"]
         dict_moves = {k: v for k, v in values.items() if k in moves}
-        max_val = (
-            max_val[:2].title() + "/" + max(dict_moves, key=dict_moves.get)[:2].title()
-        )
-    else:
-        max_val = max_val[:2].title()
+        max_val2 = max(dict_moves, key=dict_moves.get)
 
-    return max_val
+    return clean_text(max_val1, max_val2)
 
 
 def generate_grid(
@@ -132,7 +145,7 @@ def generate_grid(
             soft[20 - player, house - 2] = extract_best(vals, return_type=return_type)
         if can_split:
             if return_type == "string":
-                max_val = max(vals, key=vals.get)[:2].title()
+                max_val = clean_text(max(vals, key=vals.get), "")
             else:
                 max_val = max(vals.values())
             player_ind = 11 if useable_ace else int(player / 2)

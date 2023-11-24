@@ -1,6 +1,5 @@
-from __future__ import (
-    annotations,
-)  # required for preventing the cyclical import of type annotations
+from __future__ import \
+    annotations  # required for preventing the cyclical import of type annotations
 
 import asyncio
 from collections import deque
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
 
 
 def update_replay_buffer(
-    blackjack: type[Game], buffer: deque, model: type[Net], mode="random"
+    blackjack: Game, buffer: deque, model: type[Net], mode="random"
 ):
     """step to update the replay buffer"""
 
@@ -140,7 +139,7 @@ def update_replay_buffer(
             buffer.append((state_obs, a_s, move, reward, done, state_obs_new, a_s_new))
 
 
-def play_round(blackjack: type[Game], model: type[Net], wagers: List[float]):
+def play_round(blackjack: Game, model: type[Net], wagers: List[float]):
     model.eval()
 
     blackjack.init_round(wagers)
