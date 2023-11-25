@@ -3,10 +3,10 @@ from typing import List
 
 import numpy as np
 
-from src.helpers.plotting import generate_grid
-from src.helpers.runner import play_round, select_action
 from src.modules.game import Game
 from src.modules.player import Player
+from src.q.utils.plotting import generate_grid
+from src.q.utils.runner import play_round, select_action
 
 
 def cummulative_rewards_per_round(

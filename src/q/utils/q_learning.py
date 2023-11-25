@@ -1,8 +1,8 @@
 from typing import List, Tuple
 
-from src.helpers.runner import select_action
 from src.modules.game import Game
 from src.pydantic_types import ConditionalActionSpace, StateActionPair
+from src.q.utils.runner import select_action
 
 
 def gen_episode(

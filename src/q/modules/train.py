@@ -2,13 +2,13 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from src.helpers.create_q_dict import init_q
-from src.helpers.evaluation import (compare_to_accepted, mean_cum_rewards,
-                                    q_value_assessment)
-from src.helpers.q_learning import learn_policy
-from src.helpers.runner import play_n_games
 from src.modules.cards import Card
 from src.modules.game import Game
+from src.q.utils.create_q_dict import init_q
+from src.q.utils.evaluation import (compare_to_accepted, mean_cum_rewards,
+                                    q_value_assessment)
+from src.q.utils.q_learning import learn_policy
+from src.q.utils.runner import play_n_games
 
 
 @dataclass(kw_only=True)
