@@ -1,6 +1,5 @@
-from __future__ import (
-    annotations,
-)  # required for preventing the cyclical import of type annotations
+from __future__ import \
+    annotations  # required for preventing the cyclical import of type annotations
 
 from typing import TYPE_CHECKING, List
 
@@ -34,7 +33,7 @@ def get_observation(include_count: bool, **kwargs):
 
 
 def get_action(
-    model: type[Net], method: str, policy: List[str], observation: tuple
+    model: Net, method: str, policy: List[str], observation: tuple
 ) -> str:
     if method == "random":
         move = np.random.choice(policy)
@@ -48,11 +47,11 @@ def get_action(
 
 
 def create_state_action(
-    player: type[Player],
+    player: Player,
     house_show: int,
     include_count: bool,
     true_count: float,
-    model: type[Net],
+    model: Net,
     method: str = "argmax",
 ):
     player_total, useable_ace = player.get_value()

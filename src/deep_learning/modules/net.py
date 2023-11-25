@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class Net(nn.Module):
-    def __init__(self, input_dim, hidden_layers=[], allow_surrender=False):
+    def __init__(self, input_dim, hidden_layers=[], allow_surrender=True):
         super().__init__()
 
         assert len(hidden_layers), "must have at least 1 hidden layer"
@@ -61,6 +61,7 @@ class Net(nn.Module):
 
         if avail_actions:
             mask_t = self.mask(avail_actions)
+            # torch.inf * 0 -> torch.nan... so use nan_to_num instead.
             q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
 
         if method == "argmax":

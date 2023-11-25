@@ -1,6 +1,5 @@
-from __future__ import (
-    annotations,
-)  # required for preventing the cyclical import of type annotations
+from __future__ import \
+    annotations  # required for preventing the cyclical import of type annotations
 
 from collections import deque
 from typing import TYPE_CHECKING, List, Tuple
@@ -17,42 +16,42 @@ if TYPE_CHECKING:
 
 
 def state_action_generator(
-    blackjack: type[Game],
-    player: type[Player],
-    model: type[Net],
+    blackjack: Game,
+    player_ind: int,
+    model: Net,
     include_count: bool,
     include_continuous_count: bool,
     method: str = "random",
 ) -> List[List[Tuple]]:
-    house_show = blackjack.get_house_show(show_value=True)
-
-    count = blackjack.get_count()
-    true_count = count * 52 / blackjack.cards.sum()
+    house_card_show = blackjack.get_house_show()
+    house_value = house_card_show.value if house_card_show.value > 1 else 11
+    player: Player = blackjack.players[player_ind]
 
     s_a = [[]]
+
+    true_count = blackjack.true_count
 
     while not player.is_done():
         observation, move, policy = create_state_action(
             player=player,
-            house_show=house_show,
+            house_show=house_value,
             include_count=include_count,
             true_count=true_count,
             model=model,
             method=method,
         )
 
-        nHand = player._get_cur_hand()  # need this for isolating "split" moves.
+        nHand = player.i_hand  # need this for isolating "split" moves.
         s_a_pair = (observation, move, policy)
         s_a[nHand].append(s_a_pair)
 
         if move == "split":
             s_a.append(s_a[nHand].copy())
 
-        blackjack.step_player(player, move)
+        blackjack.step_player(player_ind, move)
 
         if include_continuous_count:
-            count = blackjack.get_count()
-            true_count = count * 52 / blackjack.cards.sum()
+            true_count = blackjack.true_count
 
     return s_a
 
@@ -108,9 +107,9 @@ def buffer_collector(
 
 
 def update_replay_buffer(
-    blackjack: type[Game],
+    blackjack: Game,
     buffer: deque,
-    model: type[Net],
+    model: Net,
     include_count: bool,
     include_continuous_count: bool,
     method: str = "random",
@@ -121,24 +120,25 @@ def update_replay_buffer(
     if blackjack.house_blackjack:
         return
 
-    player: type[Player] = blackjack.players[0]
-
     s_a_pairs = state_action_generator(
         blackjack=blackjack,
-        player=player,
+        player=0,
         model=model,
         include_count=include_count,
         include_continuous_count=include_continuous_count,
         method=method,
     )
 
-    blackjack.step_house()
-    _, reward_hands = player.get_result(blackjack.house.cards[0])
+    blackjack.step_house(only_reveal_card=True)
+    while not blackjack.house_done():
+        blackjack.step_house()
+
+    _, results = blackjack.get_results()
 
     buffer_collector(
         buffer=buffer,
         s_a_pairs=s_a_pairs,
-        rewards=reward_hands,
+        rewards=results[0],
     )
 
 
