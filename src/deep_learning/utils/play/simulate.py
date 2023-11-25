@@ -1,6 +1,5 @@
-from __future__ import (
-    annotations,
-)  # required for preventing the cyclical import of type annotations
+from __future__ import \
+    annotations  # required for preventing the cyclical import of type annotations
 
 import asyncio
 from typing import TYPE_CHECKING, List
@@ -14,12 +13,11 @@ from .helpers import create_state_action
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors. # noqa: E501
     from src.deep_learning.modules import Net
-    from src.modules.player import Player
 
 
 def play_round(
-    blackjack: type[Game],
-    model: type[Net],
+    blackjack: Game,
+    model: Net,
     wagers: List[float],
     include_count: bool,
     method: str = "argmax",
@@ -29,34 +27,34 @@ def play_round(
     blackjack.init_round(wagers)
     blackjack.deal_init()
 
-    house_show = blackjack.get_house_show(show_value=True)
+    house_card_show = blackjack.get_house_show()
+    house_value = house_card_show.value if house_card_show.value > 1 else 11
 
-    count = blackjack.get_count()
-    true_count = count * 52 / blackjack.cards.sum()
-
-    for player in blackjack.players:
-        player: type[Player]
+    for i, player in enumerate(blackjack.players):
         while not player.is_done():
             _, move, _ = create_state_action(
                 player=player,
-                house_show=house_show,
+                house_show=house_value,
                 include_count=include_count,
-                true_count=true_count,
+                true_count=blackjack.true_count,
                 model=model,
                 method=method,
             )
 
-            blackjack.step_player(player, move)
+            blackjack.step_player(i, move)
 
-    blackjack.step_house()
+    blackjack.step_house(only_reveal_card=True)
+    while not blackjack.house_done():
+        blackjack.step_house()
+
     _, players_winnings = blackjack.get_results()
 
     return players_winnings
 
 
 async def play_rounds(
-    blackjack: type[Game],
-    model: type[Net],
+    blackjack: Game,
+    model: Net,
     n_rounds: int,
     wagers: List[float],
     include_count: bool,
@@ -79,7 +77,7 @@ async def play_rounds(
 
 
 async def play_games(
-    model: type[Net],
+    model: Net,
     n_games: int,
     n_rounds: int,
     wagers: List[float],

@@ -9,11 +9,9 @@ import torch
 import torch.nn as nn
 
 from src.deep_learning.utils.play import play_games
-from src.deep_learning.utils.replay_buffer import (
-    gather_buffer_obs,
-    gather_target_obs,
-    update_replay_buffer,
-)
+from src.deep_learning.utils.replay_buffer import (gather_buffer_obs,
+                                                   gather_target_obs,
+                                                   update_replay_buffer)
 
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors. # noqa: E501
@@ -23,8 +21,8 @@ if TYPE_CHECKING:
 
 class Trainer:
     def __init__(self, online_net, target_net, lr, replay_size, include_count):
-        self.online_net: type[Net] = online_net
-        self.target_net: type[Net] = target_net
+        self.online_net: Net = online_net
+        self.target_net: Net = target_net
 
         self.include_count = include_count
 
@@ -37,7 +35,7 @@ class Trainer:
     def copy_online_to_target(self):
         self.target_net.load_state_dict(deepcopy(self.online_net.state_dict()))
 
-    def update_buffer(self, blackjack: type[Game], method: str = "random"):
+    def update_buffer(self, blackjack: Game, method: str = "random"):
         with torch.no_grad():
             update_replay_buffer(
                 blackjack=blackjack,

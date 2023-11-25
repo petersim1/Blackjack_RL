@@ -70,9 +70,7 @@ def buffer_collector(
     """
     for i, s_a_pair_hand in enumerate(s_a_pairs):
         for j, s_a_pair in enumerate(s_a_pair_hand):
-            state_obs = s_a_pair[0]
-            move = s_a_pair[1]
-            action_space = s_a_pair[2]
+            state_obs, move, action_space = s_a_pair
             # might want to further incentivize hitting
             # reward = 0.25*int(s_a_pair.move in ["hit", "split"])
             reward = 0
@@ -122,7 +120,7 @@ def update_replay_buffer(
 
     s_a_pairs = state_action_generator(
         blackjack=blackjack,
-        player=0,
+        player_ind=0,
         model=model,
         include_count=include_count,
         include_continuous_count=include_continuous_count,
