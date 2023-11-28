@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import deque
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -8,10 +7,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.deep_learning.utils.play import play_games
+from src.deep_learning.modules.replay import ReplayBuffer
 from src.deep_learning.utils.replay_buffer import (gather_buffer_obs,
                                                    gather_target_obs,
                                                    update_replay_buffer)
+from src.deep_learning.utils.runner import play_games
 
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors. # noqa: E501
@@ -20,17 +20,19 @@ if TYPE_CHECKING:
 
 
 class Trainer:
-    def __init__(self, online_net, target_net, lr, replay_size, include_count):
+    def __init__(
+            self, online_net, target_net, replay_size, include_count,
+            implicit_masking=True
+    ):
         self.online_net: Net = online_net
         self.target_net: Net = target_net
 
+        self.implicit_masking = implicit_masking
+
         self.include_count = include_count
 
-        self.loss_fct = nn.SmoothL1Loss()
-        self.optimizer = torch.optim.Adam(self.online_net.parameters(), lr=lr)
-
         self.replay_size = replay_size
-        self.replay_buffer = deque([], maxlen=replay_size)
+        self.replay_buffer = ReplayBuffer(capacity=replay_size)
 
     def copy_online_to_target(self):
         self.target_net.load_state_dict(deepcopy(self.online_net.state_dict()))
@@ -44,9 +46,13 @@ class Trainer:
                 include_count=self.include_count,
                 include_continuous_count=False,
                 method=method,
+                implicit_masking=self.implicit_masking,
             )
 
-    def train_epoch(self, batch_size: int, gamma: float):
+    def train_epoch(
+            self, batch_size: int, gamma: float, loss_fct: nn.modules.loss._Loss,
+            optimizer: torch.optim.Optimizer,
+            scheduler: torch.optim.lr_scheduler.ExponentialLR):
         (
             obs_t,
             action_space,
@@ -74,11 +80,15 @@ class Trainer:
 
         q_values: torch.Tensor = self.online_net.forward(obs_t)
         action_q_values = q_values.gather(1, moves_t)
+        # _, action_q_values, _ = self.online_net.act(
+        #     obs=obs_t, avail_actions=action_space
+        # )
 
-        self.optimizer.zero_grad()
-        loss: torch.Tensor = self.loss_fct(action_q_values, targets_t)
+        optimizer.zero_grad()
+        loss: torch.Tensor = loss_fct(action_q_values, targets_t)
         loss.backward()
-        self.optimizer.step()
+        optimizer.step()
+        scheduler.step()
 
         return loss.item()
 
@@ -92,6 +102,7 @@ class Trainer:
             wagers=wagers,
             include_count=self.include_count,
             game_hyperparams=game_hyperparams,
+            implicit_masking=self.implicit_masking
         )
         mean_reward = np.mean(r[:, 0, :])
 
