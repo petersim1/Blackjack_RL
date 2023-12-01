@@ -1,4 +1,5 @@
-import numpy as np
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,7 +28,7 @@ class Net(nn.Module):
 
     def mask(self, valid_moves):
         def to_mask(moves):
-            return [1 if (move in moves) else torch.nan for move in self.moves]
+            return [move not in moves for move in self.moves]
 
         return torch.tensor(list(map(to_mask, valid_moves)))
 
@@ -37,7 +38,9 @@ class Net(nn.Module):
             x_t = F.relu(layer(x_t))
         return self.fc_output(x_t)
 
-    def act(self, obs, method="argmax", avail_actions=[]):
+    def act(
+            self, obs, method="argmax", avail_actions=[]
+            ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Used for explicit masking
 
@@ -55,20 +58,17 @@ class Net(nn.Module):
         with torch.no_grad():
             q_values_t = self.forward(obs)
 
-            q_avail_t = q_values_t
+            q_avail_t: torch.Tensor = q_values_t
 
             if avail_actions:
                 mask_t = self.mask(avail_actions)
-                # torch.inf * 0 -> torch.nan... so use nan_to_num instead.
-                q_avail_t = torch.nan_to_num(q_avail_t * mask_t, nan=-torch.inf)
+                q_avail_t = q_avail_t.masked_fill(mask_t, -torch.inf)
 
             if method == "argmax":
-                actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True).detach()
+                actions_t = torch.argmax(q_avail_t, dim=1, keepdim=True)
             else:
-                action_p = F.softmax(q_avail_t, dim=1).detach().numpy()
-                actions_t = torch.tensor(
-                    list(map(lambda x: np.random.choice(x.shape[0], p=x), action_p))
-                ).unsqueeze(-1)
+                action_p = F.softmax(q_avail_t, dim=1)
+                actions_t = torch.multinomial(action_p, num_samples=1)
 
             q_selection_t = q_avail_t.gather(1, index=actions_t)
 

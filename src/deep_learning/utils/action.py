@@ -13,19 +13,15 @@ if TYPE_CHECKING:
 
 def select_action(
     model: Net, method: str, policy: List[str], observation: tuple,
-    implicit_masking: bool = True,
 ) -> str:
     if method == "random":
-        if implicit_masking:
-            return np.random.choice(model.moves)
-        else:
-            return np.random.choice(policy)
+        return np.random.choice(policy)
     with torch.no_grad():
         obs_t = torch.tensor(observation, dtype=torch.float32).unsqueeze(0)
         _, _, action_ind = model.act(
             obs=obs_t,
             method=method,
-            avail_actions=[] if implicit_masking else [policy]
+            avail_actions=[policy]
         )
         move = model.moves[action_ind[0][0].item()]
         return move

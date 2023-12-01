@@ -9,7 +9,6 @@ import torch.nn as nn
 
 from src.deep_learning.modules.replay import ReplayBuffer
 from src.deep_learning.utils.replay_buffer import (gather_buffer_obs,
-                                                   gather_target_obs,
                                                    update_replay_buffer)
 from src.deep_learning.utils.runner import play_games
 
@@ -22,12 +21,9 @@ if TYPE_CHECKING:
 class Trainer:
     def __init__(
             self, online_net, target_net, replay_size, include_count,
-            implicit_masking=True
     ):
         self.online_net: Net = online_net
         self.target_net: Net = target_net
-
-        self.implicit_masking = implicit_masking
 
         self.include_count = include_count
 
@@ -37,7 +33,7 @@ class Trainer:
     def copy_online_to_target(self):
         self.target_net.load_state_dict(deepcopy(self.online_net.state_dict()))
 
-    def update_buffer(self, blackjack: Game, method: str = "random"):
+    def update_buffer(self, blackjack: Game, method: str = "random", force_cards=[]):
         with torch.no_grad():
             update_replay_buffer(
                 blackjack=blackjack,
@@ -46,16 +42,17 @@ class Trainer:
                 include_count=self.include_count,
                 include_continuous_count=False,
                 method=method,
-                implicit_masking=self.implicit_masking,
+                force_cards=force_cards,
             )
 
     def train_epoch(
             self, batch_size: int, gamma: float, loss_fct: nn.modules.loss._Loss,
             optimizer: torch.optim.Optimizer,
             scheduler: torch.optim.lr_scheduler.ExponentialLR):
+        # Accumulate SARSA observations from replay buffer
         (
             obs_t,
-            action_space,
+            _,
             moves_t,
             rewards_t,
             dones_t,
@@ -67,14 +64,23 @@ class Trainer:
             moves=self.online_net.moves,
         )
 
-        targets_t = gather_target_obs(
-            target_net=self.target_net,
-            obs_next_t=obs_next_t,
-            action_space_next=action_space_next,
-            rewards_t=rewards_t,
-            dones_t=dones_t,
-            gamma=gamma,
+        # Use these next states + next action_spaces to get target network
+        # outputs (optimal next q value)
+        target_q_argmax: torch.Tensor
+        _, target_q_argmax, _ = self.target_net.act(
+            obs_next_t, method="argmax", avail_actions=action_space_next
         )
+
+        # reward clipping. We know our real rewards are bounded to [-2,2]
+        # which capture the case of doubling and splitting...
+        # we can clip rewards to make the model more robust in practice.
+
+        target_outputs = target_q_argmax.masked_fill(dones_t.bool(), 0)
+        # target_outputs = torch.clip(target_outputs, min=-1, max=1)
+
+        # what we say here... is if it's a terminal state, use the reward observed
+        # otherwise, use the output from the target network (as reward would be 0).
+        targets_t = rewards_t + gamma * target_outputs
 
         self.online_net.train()
 
@@ -87,6 +93,7 @@ class Trainer:
         optimizer.zero_grad()
         loss: torch.Tensor = loss_fct(action_q_values, targets_t)
         loss.backward()
+        # nn.utils.clip_grad_value_(self.online_net.parameters(), 100)
         optimizer.step()
         scheduler.step()
 
@@ -102,7 +109,6 @@ class Trainer:
             wagers=wagers,
             include_count=self.include_count,
             game_hyperparams=game_hyperparams,
-            implicit_masking=self.implicit_masking
         )
         mean_reward = np.mean(r[:, 0, :])
 

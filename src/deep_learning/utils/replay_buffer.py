@@ -22,14 +22,12 @@ def generate_state_action_pairs(
     include_count: bool,
     include_continuous_count: bool,
     method: str = "random",
-    implicit_masking: bool = True,
-) -> Tuple[List[List[Tuple]], bool]:
+) -> List[List[Tuple]]:
     house_card_show = blackjack.get_house_show()
     house_value = house_card_show.value if house_card_show.value > 1 else 11
     player = blackjack.players[player_ind]
 
     s_a = [[]]
-    invalid_move = False
 
     true_count = blackjack.true_count
 
@@ -38,37 +36,22 @@ def generate_state_action_pairs(
         policy = player.get_valid_moves()
 
         if include_count:
-            if implicit_masking:
-                observation = (
-                    player_total,
-                    house_value,
-                    2 * int(useable_ace) - 1,
-                    2 * int("split" in policy) - 1,
-                    2 * int("double" in policy) - 1,
-                    true_count
-                )
-            else:
-                observation = (
-                    player_total,
-                    house_value,
-                    2 * int(useable_ace) - 1,
-                    true_count
-                )
+            observation = (
+                player_total,
+                house_value,
+                2 * int(useable_ace) - 1,
+                # 2 * int("split" in policy) - 1,
+                # 2 * int("double" in policy) - 1,
+                true_count
+            )
         else:
-            if implicit_masking:
-                observation = (
-                    player_total,
-                    house_value,
-                    2 * int(useable_ace) - 1,
-                    2 * int("split" in policy) - 1,
-                    2 * int("double" in policy) - 1
-                )
-            else:
-                observation = (
-                    player_total,
-                    house_value,
-                    2 * int(useable_ace) - 1,
-                )
+            observation = (
+                player_total,
+                house_value,
+                2 * int(useable_ace) - 1,
+                # 2 * int("split" in policy) - 1,
+                # 2 * int("double" in policy) - 1
+            )
 
         move = select_action(
             model=model, method=method, policy=policy, observation=observation
@@ -79,11 +62,6 @@ def generate_state_action_pairs(
         s_a_pair = (observation, policy, move)
         s_a[nHand].append(s_a_pair)
 
-        if move not in policy:
-            # will only ever happen if implicit_masking = True
-            invalid_move = True
-            break
-
         if move == "split":
             s_a.append(s_a[nHand].copy())
 
@@ -92,7 +70,7 @@ def generate_state_action_pairs(
         if include_continuous_count:
             true_count = blackjack.true_count
 
-    return s_a, invalid_move
+    return s_a
 
 
 def update_replay_buffer(
@@ -102,31 +80,27 @@ def update_replay_buffer(
     include_count: bool,
     include_continuous_count: bool,
     method: str = "random",
-    implicit_masking: bool = True,
+    force_cards: list = [],
 ):
     blackjack.init_round([1])
-    blackjack.deal_init()
+    blackjack.deal_init(force_cards=force_cards)
 
-    s_a_pairs, invalid_state = generate_state_action_pairs(
+    s_a_pairs = generate_state_action_pairs(
         blackjack=blackjack,
         player_ind=0,
         model=model,
         include_count=include_count,
         include_continuous_count=include_continuous_count,
         method=method,
-        implicit_masking=implicit_masking,
     )
 
-    rewards = [-0.2]*len(s_a_pairs)
+    blackjack.step_house(only_reveal_card=True)
+    while not blackjack.house_done():
+        blackjack.step_house()
 
-    if not invalid_state:
-        blackjack.step_house(only_reveal_card=True)
-        while not blackjack.house_done():
-            blackjack.step_house()
+    _, results = blackjack.get_results()
 
-        _, results = blackjack.get_results()
-
-        rewards = results[0]
+    rewards = results[0]
 
     for i, s_a_pair_hand in enumerate(s_a_pairs):
         for j, s_a_pair in enumerate(s_a_pair_hand):
@@ -205,27 +179,8 @@ def gather_buffer_obs(replay_buffer: ReplayBuffer, batch_size: int, moves: List[
     )
 
 
-def gather_target_obs(
-    target_net: type[Net],
-    action_space_next: List[List[str]],
-    obs_next_t: torch.Tensor,
-    rewards_t: torch.Tensor,
-    dones_t: torch.Tensor,
-    gamma: float,
-) -> torch.Tensor:
-    _, target_q_argmax, _ = target_net.act(
-        obs_next_t, method="argmax", avail_actions=action_space_next
-    )
-    targets_t = rewards_t + torch.nan_to_num(
-        gamma * (1 - dones_t) * target_q_argmax, nan=0
-    )
-
-    return targets_t
-
-
 __all__ = [
     "generate_state_action_pairs",
     "update_replay_buffer",
     "gather_buffer_obs",
-    "gather_target_obs"
 ]
