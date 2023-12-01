@@ -1,41 +1,32 @@
-from typing import List, Optional, Union
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
 
 colorMap = {
-    "St": "yellow",
-    "Hi": "white",
-    "Do": "green",
+    "S": "yellow",
+    "H": "white",
+    "D": "green",
     "Su": "grey",
     "Sp": "blue",
-    "Do/Hi": "green",
-    "Do/St": "green",
+    "D/H": "green",
+    "D/S": "green",
+    "Su/H": "grey",
+    "Su/S": "grey",
+    "Y": "green",
+    "N": "white"
 }
 
 
 def show_action_table(
     data: np.ndarray,
-    xticks: Optional[List[Union[int, str]]] = None,
-    yticks: Optional[List[Union[int, str]]] = None,
+    xticks: List[Union[int, str]],
+    yticks: List[Union[int, str]],
 ) -> pd.DataFrame:
-    x_range = np.where(data.any(axis=1))[0]
-    y_range = np.where(data.any(axis=0))[0]
-
-    data = data = data[x_range, :][:, y_range]
-
     df = pd.DataFrame(data)
-    if xticks:
-        df.index = xticks
-    else:
-        df.index = x_range
-    if yticks:
-        df.columns = yticks
-    else:
-        df.columns = y_range
-
+    df.index = yticks
+    df.columns = xticks
     df = df.style.applymap(lambda x: "background-color: %s; color: black" % colorMap[x])
-
     return df
 
 

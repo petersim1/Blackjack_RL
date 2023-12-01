@@ -120,6 +120,9 @@ def update_replay_buffer(
                 action_space_next = None
                 done = 1
             else:
+                # important step to reward / penalize splitting,
+                # since these create new hands, I don't want to lose
+                # information from an original split.
                 if move == "split":
                     reward = sum(rewards) / len(rewards)
                 state_obs_next, action_space_next, _ = s_a_pair_hand[j + 1]
