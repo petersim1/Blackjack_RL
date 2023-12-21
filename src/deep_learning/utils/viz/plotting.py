@@ -23,16 +23,12 @@ def interp(data, interpol=1):
     return data_inter
 
 
-def plot_mesh(axis, data, interpolate=1, ticks=None, zlims=[], **kwargs):
-    x_range = np.where(data.any(axis=1))[0]
-    y_range = np.where(data.any(axis=0))[0]
-
-    data = data[x_range, :][:, y_range]
-
+def plot_mesh(axis, data, ranges, interpolate=1, ticks=None, zlims=[]):
+    x_range, y_range = ranges
     data_interp = interp(data, interpolate)
 
-    x_r = np.linspace(min(y_range), max(y_range), data_interp.shape[1])
-    y_r = np.linspace(min(x_range), max(x_range), data_interp.shape[0])
+    x_r = np.linspace(min(x_range), max(x_range), data_interp.shape[1])
+    y_r = np.linspace(max(y_range), min(y_range), data_interp.shape[0])
 
     x, y = np.meshgrid(x_r, y_r)
     axis.plot_surface(
@@ -43,7 +39,6 @@ def plot_mesh(axis, data, interpolate=1, ticks=None, zlims=[], **kwargs):
         cstride=1,
         cmap="viridis",
         edgecolor="none",
-        **kwargs
     )
     # axis.plot_surface(x, y, data)
     axis.view_init(azim=-25)
@@ -51,8 +46,7 @@ def plot_mesh(axis, data, interpolate=1, ticks=None, zlims=[], **kwargs):
     axis.set_ylabel("Player Shows")
     axis.set_zlabel("Value")
     if ticks is not None:
-        axis.set(yticks=y_range, yticklabels=ticks)
-
+        axis.set(yticks=x_range, yticklabels=ticks)
     if zlims:
         axis.set_zlim(*zlims)
 

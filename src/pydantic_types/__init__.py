@@ -3,14 +3,14 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 
-class StateActionPair(BaseModel):
+class StateActionPairI(BaseModel):
     player_show: int
     house_show: int
     useable_ace: bool
     move: str
 
 
-class ReplayBuffer(BaseModel):
+class ReplayBufferI(BaseModel):
     obs: tuple
     action_space: List[str]
     move: str

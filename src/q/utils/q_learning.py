@@ -1,13 +1,13 @@
 from typing import List, Tuple
 
-from src.helpers.runner import select_action
 from src.modules.game import Game
-from src.pydantic_types import ConditionalActionSpace, StateActionPair
+from src.pydantic_types import ConditionalActionSpace, StateActionPairI
+from src.q.utils.runner import select_action
 
 
 def gen_episode(
     game: Game, player_ind: int, q: object, epsilon: float, method: str
-) -> Tuple[List[List[StateActionPair]], ConditionalActionSpace]:
+) -> Tuple[List[List[StateActionPairI]], ConditionalActionSpace]:
     """
     Given the blackjack module, index of Player, Q values object, epsilon
     value, and method;
@@ -38,7 +38,7 @@ def gen_episode(
             state=q_dict, policy=policy, epsilon=epsilon, method=method
         )
 
-        s_a_pair = StateActionPair(
+        s_a_pair = StateActionPairI(
             player_show=player_total,
             house_show=house_value,
             useable_ace=useable_ace,
@@ -91,7 +91,7 @@ def learn_policy(
 
     assert method in ["epsilon", "thompson"], "invalid method selected"
 
-    s_a_pairs: List[List[List[StateActionPair]]] = []
+    s_a_pairs: List[List[List[StateActionPairI]]] = []
     conditional_action_space: List[ConditionalActionSpace] = []
 
     for ind in range(len(game.players)):

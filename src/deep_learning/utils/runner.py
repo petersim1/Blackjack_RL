@@ -1,6 +1,5 @@
-from __future__ import (
-    annotations,
-)  # required for preventing the cyclical import of type annotations
+from __future__ import \
+    annotations  # required for preventing the cyclical import of type annotations
 
 import asyncio
 from typing import TYPE_CHECKING, List
@@ -9,54 +8,68 @@ import numpy as np
 
 from src.modules.game import Game
 
-from .helpers import create_state_action
+from .action import select_action
 
 if TYPE_CHECKING:
     # if type_checking, import the modules for type hinting. Otherwise we get cyclical import errors. # noqa: E501
     from src.deep_learning.modules import Net
-    from src.modules.player import Player
 
 
 def play_round(
-    blackjack: type[Game],
-    model: type[Net],
+    blackjack: Game,
+    model: Net,
     wagers: List[float],
     include_count: bool,
-    method: str = "argmax",
 ):
-    model.eval()
-
     blackjack.init_round(wagers)
     blackjack.deal_init()
 
-    house_show = blackjack.get_house_show(show_value=True)
+    house_card_show = blackjack.get_house_show()
+    house_value = house_card_show.value if house_card_show.value > 1 else 11
 
-    count = blackjack.get_count()
-    true_count = count * 52 / blackjack.cards.sum()
-
-    for player in blackjack.players:
-        player: type[Player]
+    for i, player in enumerate(blackjack.players):
         while not player.is_done():
-            _, move, _ = create_state_action(
-                player=player,
-                house_show=house_show,
-                include_count=include_count,
-                true_count=true_count,
+            player_total, useable_ace = player.get_value()
+            policy = player.get_valid_moves()
+
+            if include_count:
+                observation = (
+                    player_total,
+                    house_value,
+                    2 * int(useable_ace) - 1,
+                    # 2 * int("split" in policy) - 1,
+                    # 2 * int("double" in policy) - 1,
+                    blackjack.true_count
+                )
+            else:
+                observation = (
+                    player_total,
+                    house_value,
+                    2 * int(useable_ace) - 1,
+                    # 2 * int("split" in policy) - 1,
+                    # 2 * int("double" in policy) - 1
+                )
+            move = select_action(
                 model=model,
-                method=method,
+                method="argmax",
+                policy=policy,
+                observation=observation,
             )
 
-            blackjack.step_player(player, move)
+            blackjack.step_player(i, move)
 
-    blackjack.step_house()
+    blackjack.step_house(only_reveal_card=True)
+    while not blackjack.house_done():
+        blackjack.step_house()
+
     _, players_winnings = blackjack.get_results()
 
     return players_winnings
 
 
 async def play_rounds(
-    blackjack: type[Game],
-    model: type[Net],
+    blackjack: Game,
+    model: Net,
     n_rounds: int,
     wagers: List[float],
     include_count: bool,
@@ -79,13 +92,15 @@ async def play_rounds(
 
 
 async def play_games(
-    model: type[Net],
+    model: Net,
     n_games: int,
     n_rounds: int,
     wagers: List[float],
     include_count: bool,
     game_hyperparams: object,
 ):
+    # Will use the optimal move to carry out gameplay
+    model.eval()
     tasks = []
     for _ in range(n_games):
         blackjack = Game(**game_hyperparams)
