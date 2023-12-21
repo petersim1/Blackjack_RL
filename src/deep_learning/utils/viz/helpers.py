@@ -177,4 +177,4 @@ def generate_grid(model: Net, return_type: str = "string"):
     return hard_totals, soft_totals, split_totals
 
 
-__all__ = ["gen_all_states", "generate_grid"]
+__all__ = ["gen_all_states", "generate_grid", "fill_value_grid"]
