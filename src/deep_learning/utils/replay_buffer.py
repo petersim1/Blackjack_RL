@@ -20,7 +20,6 @@ def generate_state_action_pairs(
     player_ind: int,
     model: Net,
     include_count: bool,
-    include_continuous_count: bool,
     method: str = "random",
 ) -> List[List[Tuple]]:
     house_card_show = blackjack.get_house_show()
@@ -28,8 +27,6 @@ def generate_state_action_pairs(
     player = blackjack.players[player_ind]
 
     s_a = [[]]
-
-    true_count = blackjack.true_count
 
     while not player.is_done():
         player_total, useable_ace = player.get_value()
@@ -40,17 +37,13 @@ def generate_state_action_pairs(
                 player_total,
                 house_value,
                 2 * int(useable_ace) - 1,
-                # 2 * int("split" in policy) - 1,
-                # 2 * int("double" in policy) - 1,
-                true_count
+                blackjack.true_count
             )
         else:
             observation = (
                 player_total,
                 house_value,
                 2 * int(useable_ace) - 1,
-                # 2 * int("split" in policy) - 1,
-                # 2 * int("double" in policy) - 1
             )
 
         move = select_action(
@@ -67,9 +60,6 @@ def generate_state_action_pairs(
 
         blackjack.step_player(player_ind, move)
 
-        if include_continuous_count:
-            true_count = blackjack.true_count
-
     return s_a
 
 
@@ -78,7 +68,6 @@ def update_replay_buffer(
     buffer: ReplayBuffer,
     model: Net,
     include_count: bool,
-    include_continuous_count: bool,
     method: str = "random",
     force_cards: list = [],
 ):
@@ -90,7 +79,6 @@ def update_replay_buffer(
         player_ind=0,
         model=model,
         include_count=include_count,
-        include_continuous_count=include_continuous_count,
         method=method,
     )
 

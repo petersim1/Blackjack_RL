@@ -37,8 +37,6 @@ def play_round(
                     player_total,
                     house_value,
                     2 * int(useable_ace) - 1,
-                    # 2 * int("split" in policy) - 1,
-                    # 2 * int("double" in policy) - 1,
                     blackjack.true_count
                 )
             else:
@@ -46,8 +44,6 @@ def play_round(
                     player_total,
                     house_value,
                     2 * int(useable_ace) - 1,
-                    # 2 * int("split" in policy) - 1,
-                    # 2 * int("double" in policy) - 1
                 )
             move = select_action(
                 model=model,
@@ -119,3 +115,110 @@ async def play_games(
     rewards = await asyncio.gather(*tasks)
 
     return np.array(rewards)
+
+
+# FOR GATHERING CARD COUNT
+
+
+def play_round_gather_count(
+    blackjack: Game,
+    model: Net,
+    wagers: List[float],
+):
+
+    blackjack.init_round(wagers)
+    blackjack.deal_init()
+
+    # we'll use the count after the initial deal.
+    true_count = blackjack.true_count
+
+    house_card_show = blackjack.get_house_show()
+    house_value = house_card_show.value if house_card_show.value > 1 else 11
+
+    for i, player in enumerate(blackjack.players):
+        while not player.is_done():
+            player_total, useable_ace = player.get_value()
+            policy = player.get_valid_moves()
+
+            observation = (
+                player_total,
+                house_value,
+                2 * int(useable_ace) - 1,
+                blackjack.true_count
+            )
+            move = select_action(
+                model=model,
+                method="argmax",
+                policy=policy,
+                observation=observation,
+            )
+
+            blackjack.step_player(i, move)
+
+    blackjack.step_house(only_reveal_card=True)
+    while not blackjack.house_done():
+        blackjack.step_house()
+
+    _, players_winnings = blackjack.get_results()
+
+    return true_count, players_winnings
+
+
+async def play_rounds_gather_count(
+    blackjack: type[Game],
+    model: type[Net],
+    n_rounds: int,
+    wagers: List[float],
+):
+    count_winnings = {}
+
+    for _ in range(n_rounds):
+        count, players_rewards = play_round_gather_count(
+            blackjack=blackjack, model=model, wagers=wagers
+        )
+        if count is None:
+            continue
+
+        count_rounded = round(count)
+        if count_rounded not in count_winnings:
+            count_winnings[count_rounded] = []
+
+        for reward in players_rewards:
+            # reward is a list which represents the reward for each hand of a single player due to splitting. # noqa: E501
+            count_winnings[count_rounded].append(sum(reward))
+
+    return count_winnings
+
+
+async def play_games_gather_count(
+    model: type[Net],
+    n_games: int,
+    n_rounds: int,
+    wagers: List[float],
+    game_hyperparams: object,
+):
+    tot_count_winnings = {}
+
+    tasks = []
+    for _ in range(n_games):
+        blackjack = Game(**game_hyperparams)
+        tasks.append(
+            asyncio.create_task(
+                play_rounds_gather_count(
+                    blackjack=blackjack,
+                    model=model,
+                    n_rounds=n_rounds,
+                    wagers=wagers,
+                )
+            )
+        )
+
+    count_winnings = await asyncio.gather(*tasks)
+
+    for count_obj in count_winnings:
+        for count, rewards in count_obj.items():
+            if count not in tot_count_winnings:
+                tot_count_winnings[count] = []
+            tot_count_winnings[count].extend(rewards)
+
+    return tot_count_winnings

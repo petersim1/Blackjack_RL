@@ -40,7 +40,6 @@ class Trainer:
                 buffer=self.replay_buffer,
                 model=self.online_net,
                 include_count=self.include_count,
-                include_continuous_count=False,
                 method=method,
                 force_cards=force_cards,
             )
