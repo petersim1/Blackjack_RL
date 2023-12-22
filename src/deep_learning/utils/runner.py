@@ -130,6 +130,7 @@ def play_round_gather_count(
     blackjack.deal_init()
 
     # we'll use the count after the initial deal.
+    # but we'll use the current count to dictate each move.
     true_count = blackjack.true_count
 
     house_card_show = blackjack.get_house_show()
@@ -161,7 +162,12 @@ def play_round_gather_count(
 
     _, players_winnings = blackjack.get_results()
 
-    return true_count, players_winnings
+    # Take the average total reward per player.
+    return (
+        true_count,
+        blackjack.house_blackjack,
+        np.mean([sum(winning) for winning in players_winnings])
+    )
 
 
 async def play_rounds_gather_count(
@@ -170,22 +176,14 @@ async def play_rounds_gather_count(
     n_rounds: int,
     wagers: List[float],
 ):
-    count_winnings = {}
+    count_winnings = []
 
     for _ in range(n_rounds):
-        count, players_rewards = play_round_gather_count(
+        count, house_blackjack, players_rewards = play_round_gather_count(
             blackjack=blackjack, model=model, wagers=wagers
         )
-        if count is None:
-            continue
 
-        count_rounded = round(count)
-        if count_rounded not in count_winnings:
-            count_winnings[count_rounded] = []
-
-        for reward in players_rewards:
-            # reward is a list which represents the reward for each hand of a single player due to splitting. # noqa: E501
-            count_winnings[count_rounded].append(sum(reward))
+        count_winnings.append((count, house_blackjack, players_rewards))
 
     return count_winnings
 
@@ -197,7 +195,7 @@ async def play_games_gather_count(
     wagers: List[float],
     game_hyperparams: object,
 ):
-    tot_count_winnings = {}
+    tot_count_winnings = []
 
     tasks = []
     for _ in range(n_games):
@@ -215,10 +213,7 @@ async def play_games_gather_count(
 
     count_winnings = await asyncio.gather(*tasks)
 
-    for count_obj in count_winnings:
-        for count, rewards in count_obj.items():
-            if count not in tot_count_winnings:
-                tot_count_winnings[count] = []
-            tot_count_winnings[count].extend(rewards)
+    for count_arr in count_winnings:
+        tot_count_winnings.extend(count_arr)
 
     return tot_count_winnings
